@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>制影 AI · 短剧工坊 — 后端联调交接</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #fff;
+    --border: #e5e4e2;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-secondary: #57534e;
+    --text-tertiary: #78716c;
+    --accent: #0f766e;
+    --accent-soft: #ccfbf1;
+    --danger: #b91c1c;
+    --warn: #b45309;
+    --code-bg: #f5f5f4;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 48px 32px 80px; }
+  h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 8px; }
+  h2 { font-size: 20px; letter-spacing: -.01em; margin: 40px 0 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, ul, ol { margin: 0 0 12px; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 13px; background: var(--code-bg);
+    padding: 1px 6px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 16px; overflow-x: auto;
+    font-family: var(--mono); font-size: 13px; line-height: 1.55; margin: 0 0 16px; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+  a:hover { border-bottom-style: solid; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+    vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; font-size: 13px;
+    color: var(--text-secondary); }
+  td code { white-space: nowrap; }
+  .lede { color: var(--text-secondary); font-size: 14px; margin-bottom: 28px; }
+  .callout { background: var(--accent-soft); border-left: 3px solid var(--accent);
+    padding: 12px 16px; border-radius: 4px; margin: 16px 0; font-size: 14px; }
+  .callout.warn { background: #fef3c7; border-left-color: var(--warn); }
+  .callout.danger { background: #fee2e2; border-left-color: var(--danger); }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 11px;
+    padding: 1px 6px; border-radius: 3px; margin-left: 6px; letter-spacing: .03em; vertical-align: 1px; }
+  .pill.p0 { background: #fee2e2; color: var(--danger); }
+  .pill.p1 { background: #fef3c7; color: var(--warn); }
+  .pill.p2 { background: var(--code-bg); color: var(--text-tertiary); }
+  .method { font-family: var(--mono); font-size: 12px; font-weight: 600;
+    padding: 2px 6px; border-radius: 3px; }
+  .method.get { background: #dbeafe; color: #1e40af; }
+  .method.post { background: #dcfce7; color: #166534; }
+  .method.patch { background: #fef3c7; color: var(--warn); }
+  .method.del { background: #fee2e2; color: var(--danger); }
+  .small { font-size: 13px; color: var(--text-secondary); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>制影 AI · 短剧工坊</h1>
+<p class="lede">前端 → 后端联调交接说明 · 2026-05-17</p>
+
+<p>这是一个给网剧团队创作网剧的工具,我负责前端,已经把 6 个页面都做完(工作台 / 编辑器 / 角色库 / 生成结果 / 使用记录 / 登录)。当前所有数据走前端本地 mock,需要后端实现真实接口后切换联调。</p>
+
+<h2>1. 交付内容 / 必读文件</h2>
+
+<table>
+  <thead>
+    <tr><th>文件</th><th>作用</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>docs/api-contract.md</code></td>
+      <td><b>核心契约</b>。所有接口的请求/响应字段、数据模型、错误码、鉴权细节都在这里。<b>以此为准</b></td>
+    </tr>
+    <tr>
+      <td><code>web/src/types/*.ts</code></td>
+      <td>TypeScript 类型定义,与契约一一对应。需要确认某个字段是否可空、类型是 string 还是 number,看这里最直观</td>
+    </tr>
+    <tr>
+      <td><code>web/src/api/_mock.ts</code></td>
+      <td><b>响应体样本</b>。每个接口的 mock 数据就是前端期望的真实返回结构。实现完接口直接 diff 一下就知道字段对没对齐</td>
+    </tr>
+    <tr>
+      <td><code>web/src/api/client.ts</code></td>
+      <td>HTTP 客户端封装。看一下能理解前端对响应体、鉴权头、错误的处理逻辑</td>
+    </tr>
+    <tr>
+      <td><code>web/src/api/*.ts</code> (除 _mock 外)</td>
+      <td>各资源的接口调用代码,显示了实际请求的 URL、HTTP 方法、参数形状</td>
+    </tr>
+    <tr>
+      <td><code>web/dist/</code></td>
+      <td>已构建好的前端产物,可直接部署联调</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>2. 必须遵守的 3 条全局约定</h2>
+
+<h3>2.1 统一响应信封</h3>
+<p>所有 JSON 接口(包括成功和业务失败)都必须返回:</p>
+<pre>{
+  "code": 0,            // 业务码: 0 = 成功,非 0 = 业务错误
+  "message": "ok",      // 错误信息(成功时随意,业务错误时给用户能看懂的中文)
+  "data": { ... },      // 实际数据;失败时可以为 null 或 { errors: [...] }
+  "request_id": "..."   // 可选,排查日志用
+}</pre>
+
+<div class="callout danger">
+  <b>不要</b>直接返回数据对象。前端拦截器会读 <code>code</code>,如果不是 0 就 <b>throw</b> 出去,UI 显示报错。所以业务失败也要 HTTP 200 + <code>code != 0</code>,而不是 HTTP 4xx。
+</div>
+
+<h3>2.2 鉴权</h3>
+<ul>
+  <li>请求头 <code>Authorization: Bearer &lt;token&gt;</code>,前端自动带</li>
+  <li>HTTP <code>401</code> → 前端自动登出并跳 <code>/login</code>。所以 token 过期/无效用 401</li>
+  <li>响应头里如果有 <code>X-Refresh-Token: &lt;new_token&gt;</code>,前端会写回 store → 用这个头做无感续签</li>
+</ul>
+
+<h3>2.3 分页</h3>
+<p>列表接口统一形如:</p>
+<pre>{
+  "list": [...],        // 当前页数据
+  "page": 1,
+  "page_size": 12,
+  "total": 47
+}</pre>
+
+<h2>3. 当前前端实际调用的接口清单</h2>
+<p class="small">按页面分组,标了优先级。P0 = 不实现这个页面就跑不起来。完整字段细节看 <code>docs/api-contract.md</code>。</p>
+
+<h3>工作台 <code>/dashboard</code> <span class="pill p0">P0</span></h3>
+<table>
+  <tr><td><span class="method get">GET</span></td><td><code>/projects</code></td><td>列表,支持 <code>status</code> / <code>q</code> / <code>page</code> / <code>page_size</code></td></tr>
+</table>
+
+<h3>编辑器 <code>/projects/:id/edit</code> <span class="pill p0">P0</span></h3>
+<table>
+  <tr><td><span class="method get">GET</span></td><td><code>/projects/:id</code></td><td>项目详情(含 global / shots / output 三层完整数据)</td></tr>
+  <tr><td><span class="method get">GET</span></td><td><code>/characters</code></td><td>角色库(编辑器要读角色列表来分配)</td></tr>
+</table>
+<p class="small">⚠️ 当前编辑器的所有修改(改字段、增删分镜)只在前端内存里,<b>没有调保存接口</b>。<code>POST /projects/:id/save</code> 已经在契约里定好,但前端"保存"按钮目前是占位。联调时如果后端先把保存做了,我再补前端。</p>
+
+<h3>角色库 <code>/characters</code> <span class="pill p0">P0</span></h3>
+<table>
+  <tr><td><span class="method get">GET</span></td><td><code>/characters</code></td><td>列表</td></tr>
+  <tr><td><span class="method post">POST</span></td><td><code>/characters</code></td><td>新建</td></tr>
+  <tr><td><span class="method patch">PATCH</span></td><td><code>/characters/:id</code></td><td>更新(允许部分字段)</td></tr>
+  <tr><td><span class="method del">DEL</span></td><td><code>/characters/:id</code></td><td>软删除</td></tr>
+</table>
+
+<h3>登录 <code>/login</code> <span class="pill p0">P0</span></h3>
+<table>
+  <tr><td><span class="method post">POST</span></td><td><code>/auth/sms/send</code></td><td><code>{ phone, scene }</code> → <code>{ expires_in, next_send_in }</code></td></tr>
+  <tr><td><span class="method post">POST</span></td><td><code>/auth/login</code></td><td>两种 method: <code>phone+code</code> 或 <code>account+password</code></td></tr>
+  <tr><td><span class="method post">POST</span></td><td><code>/auth/register</code></td><td>手机注册</td></tr>
+</table>
+
+<h3>使用记录 <code>/account</code> <span class="pill p1">P1</span></h3>
+<table>
+  <tr><td><span class="method get">GET</span></td><td><code>/account</code></td><td>余额、累计统计</td></tr>
+  <tr><td><span class="method get">GET</span></td><td><code>/account/packages</code></td><td>充值套餐列表(充值弹窗用)</td></tr>
+  <tr><td><span class="method get">GET</span></td><td><code>/account/recharges</code></td><td>充值记录</td></tr>
+  <tr><td><span class="method get">GET</span></td><td><code>/tasks</code></td><td>生成任务历史,带筛选 <code>status / resolution / task_id / date_from / date_to</code></td></tr>
+</table>
+
+<h3>生成结果 <code>/projects/:id/result</code> <span class="pill p2">P2</span></h3>
+<p>当前用 <code>GET /projects/:id</code> 拿数据 + 写死的样例视频。真正的"生成视频"接口(<code>POST /projects/:id/generations</code> + SSE 推进度)契约里有,但前端目前是占位 UI,等后端就绪后我对接。</p>
+
+<h2>4. 联调起步流程</h2>
+
+<ol>
+  <li><b>P0 接口先实现</b>:<code>GET /projects</code> + <code>GET /projects/:id</code> + <code>GET /characters</code> + <code>POST /auth/login</code>。这四个跑通,工作台、编辑器、角色库、登录就都能联调</li>
+  <li><b>本地启动</b>:后端起在 <code>http://localhost:8080</code>(改端口的话改 <code>web/vite.config.ts</code> 里的 proxy target)</li>
+  <li><b>前端切真实模式</b>:在 <code>web/.env.development</code> 改 <code>VITE_USE_MOCK=false</code>,然后 <code>cd web && npm run dev</code></li>
+  <li><b>访问</b> <code>http://localhost:5173</code>,DevTools Network 应该能看到对 <code>/api/v1/*</code> 的真实请求(Vite 代理到后端 8080)</li>
+</ol>
+
+<h3>部署联调(同源方案,推荐)</h3>
+<p>把 <code>web/dist/</code> 拷到后端服务器,用 nginx 或后端框架的静态目录托管,把 <code>/api/v1/*</code> 转给后端进程,其他路径 fallback 到 <code>index.html</code>。最简 nginx 示例:</p>
+<pre>server {
+  listen 80;
+  root /var/www/duanju/dist;
+
+  # API 走后端
+  location /api/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+
+  # 静态资源
+  location /assets/ {
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  # SPA fallback
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}</pre>
+
+<div class="callout warn">
+  跨域方案(前后端不同源)也行,但要后端开 CORS 并在前端 build 时设 <code>VITE_API_BASE_URL=https://api.xxx.com/v1</code>。同源更省事,推荐同源。
+</div>
+
+<h2>5. 验收信号</h2>
+<p>联调时按这个顺序自测:</p>
+<ol>
+  <li>访问 <code>/dashboard</code>:看到项目卡片网格,状态筛选段控件数字正确</li>
+  <li>点任意项目卡片 → 进入编辑器:左侧 9 个全局字段 + N 个分镜字段全部加载出原值,角色列表正确</li>
+  <li><code>/characters</code>:能新建/编辑/删除角色,刷新后保留</li>
+  <li><code>/login</code>:手机验证码登录返回 token 后跳回首页,刷新页面仍登录(token 持久化到 localStorage)</li>
+</ol>
+
+<h2>6. 联系 / 待对齐项</h2>
+<ul>
+  <li>契约里 <code>§5 待对齐</code> 还有几条没敲定(SSE 心跳格式、图片上传分片阈值等),实现时遇到再讨论</li>
+  <li>字段命名前后端用 <b>snake_case</b>(如 <code>shot_count</code>、<code>cover_url</code>),前端 TS 里也是这么写的,不要 camelCase</li>
+  <li>有任何字段不确定的地方,优先看 <code>web/src/api/_mock.ts</code> 里的样本数据 — 那个就是前端实际期望拿到的形状</li>
+</ul>
+
+</main>
+</body>
+</html>
