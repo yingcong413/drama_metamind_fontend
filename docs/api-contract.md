@@ -1,4 +1,4 @@
-# 制影 AI · 短剧工坊 — 前后端接口契约 v0.1
+# 制影 AI · 短剧工坊 — 前后端接口契约 v0.2
 
 > 本文档基于 Claude Design 输出的 UI 原型（`metamind_duanju-handoff.zip`）梳理而来，覆盖原型中全部交互点。
 > 前端：React + TypeScript。后端：Go。AI 视频生成调用「new API（ApiGo VIP）」平台模型，由后端代理，前端只与本服务交互。
@@ -250,11 +250,19 @@ type Shot struct {
 export type TaskStatus = "queued" | "running" | "success" | "failed";
 export type TaskType   = "i2v" | "t2v" | "v2v" | "char";
 
+// 任务类型的展示信息，由后端组装返回（label 中文名 + hue 用于头像着色）
+export interface TaskTypeInfo {
+  id: TaskType;
+  label: string;               // "图生视频" / "文生视频" / "视频续写" / "角色生成"
+  hue: number;                 // 0-360
+}
+
 export interface GenerationTask {
   id: string;                  // task_xxx
   project_id: string | null;   // char 类型为 null
   user_id: string;
-  type: TaskType;              // 图生视频 / 文生视频 / 视频续写 / 角色生成
+  user: string;                // 用户名显示串（如 "metamind"），用于任务列表行
+  type: TaskTypeInfo;          // ⚠️ 是对象不是字符串；前端要读 type.label / type.hue
   platform: string;            // 豆包视频 / 可灵 1.6 / Sora · Turbo / Vidu · pro / 墨韵
   upstream_model: string;      // new API 平台上的模型名，例 "kling-v1.6-pro"
   channel_id: number;          // new API 渠道 ID
@@ -315,6 +323,7 @@ export interface RechargePackage {
   per_unit_cents: number;         // 每元单价（用于对比）
 }
 
+// 创建充值订单的返回结构（POST /account/recharges）
 export interface RechargeOrder {
   id: string;                     // ord_xxx
   user_id: string;
@@ -329,6 +338,18 @@ export interface RechargeOrder {
   created_at: string;
   paid_at: string | null;
 }
+
+// 充值记录列表行（GET /account/recharges 的列表项）— 是 RechargeOrder 的精简显示版
+export type RechargeRecordStatus = "pending" | "success" | "failed" | "expired";
+export interface RechargeRecord {
+  id: string;
+  time: string;                   // ISO 8601，等同于订单 paid_at
+  method: string;                 // 中文显示串："微信支付" / "支付宝" / "对公转账"（非 wechat|alipay|bank 枚举）
+  amount_cents: number;           // 用户实付金额
+  credits_cents: number;          // 充值得到的余额
+  bonus_cents: number;            // 赠送
+  status: RechargeRecordStatus;
+}
 ```
 
 ---
@@ -336,6 +357,27 @@ export interface RechargeOrder {
 ## 3. 接口清单
 
 > 列已实现的状态：⬜ 待实现 / 🟦 mock / ✅ 已上线
+
+### 3.0 v0.1 前端实际接入清单(P0 优先做这些)
+
+下面这些是 **当前前端真的会调用** 的接口。其余 §3.1–§3.8 列的端点(SSE 进度、上传、PATCH 项目、prompt 润色、tasks 详情/导出、meta/options 等)在 v0.1 前端中暂未接入,可以放到后期。
+
+| 优先级 | 接口 | 前端调用位置 |
+| ---- | ---- | ---- |
+| **P0** | `POST /auth/sms/send` / `POST /auth/login` / `POST /auth/register` | `src/api/auth.ts` |
+| **P0** | `GET /projects` | 工作台 `src/pages/dashboard/` |
+| **P0** | `GET /projects/:id` | 编辑器 / 结果页 |
+| **P0** | `GET /characters`(扁平数组) / `POST` / `PATCH /:id` / `DELETE /:id` | 角色库 `src/pages/characters/` |
+| **P0** | `GET /account` / `GET /account/packages` / `GET /account/recharges` | 使用记录页 |
+| **P0** | `GET /tasks?status=&resolution=&task_id=&page=&page_size=` | 使用记录页任务表 |
+| P1 | 编辑器的所有写入(`PATCH /projects/:id`、`PUT /global`、`PUT /output`、`POST/PATCH/DELETE /shots`、`POST /save`) | 当前编辑器只在前端内存改,**"保存"按钮是占位** |
+| P1 | `POST /uploads/image` / `POST /uploads/audio` | 字段里的上传组件还没接 |
+| P2 | `POST /projects/:id/generations` + SSE 进度流 | 结果页用写死样例视频 |
+| P2 | `/prompt/preview` / `/prompt/polish` | 右侧预览面板暂未实现 |
+| P2 | `GET /meta/options` | 前端目前硬编码在 `src/lib/fieldDefs.ts`,等后端就绪再切 |
+| P2 | `GET /auth/me` / `POST /auth/logout` / `POST /auth/wechat` | 前端未调,登录后只信 localStorage token |
+
+P0 全做完就能联调跑起来 6 个页面。
 
 ### 3.1 鉴权与账户身份
 
@@ -433,13 +475,15 @@ export interface RechargeOrder {
 | DELETE | `/characters/:id`   | 删除           |
 
 #### GET `/characters`
-Query：
+**v0.1 实现:前端不传任何 query,期望返回全量扁平数组**(用户量小,角色库整体加载一次缓存)。
+
+Query(预留,前端目前不传):
 - `q` — 关键字（匹配 name / role / desc）
 - `has_ref` — `true` | `false` | 省略
 - `tags` — 逗号分隔，例 `都市,女主`
 - `page`、`page_size`
 
-响应：`data` = 分页结构，`list` 为 `Character[]`。
+**响应**:`data` = `Character[]`(扁平数组,**非**分页结构)。等用户量上来后再切分页。
 
 #### POST `/characters`
 请求体见 `Character`（去掉 `id`、`has_ref`、`hue`、时间戳）：
@@ -610,8 +654,8 @@ Query：
 | ------ | ----------------------------- | -------------------------- |
 | GET    | `/account`                    | 余额 + 本月统计 + 历史汇总 |
 | GET    | `/account/packages`           | 充值套餐列表               |
-| GET    | `/account/recharges`          | 充值记录                   |
-| POST   | `/account/recharges`          | 创建充值订单               |
+| GET    | `/account/recharges`          | 充值记录（响应 `RechargeRecord[]`，**不是** `RechargeOrder[]`，非分页） |
+| POST   | `/account/recharges`          | 创建充值订单（响应 `RechargeOrder`） |
 | GET    | `/account/recharges/:id`      | 查询订单状态（轮询用）     |
 | GET    | `/account/invoices/:order_id` | 下载发票                   |
 
@@ -723,3 +767,4 @@ Query：
 | 版本   | 日期         | 变更                          |
 | ------ | ------------ | ----------------------------- |
 | v0.1   | 2026-05-17   | 初版，覆盖原型全部交互        |
+| v0.2   | 2026-05-18   | 按 v0.1 前端实际代码对齐:`GenerationTask.type` 改为对象 `TaskTypeInfo`、补 `user` 字段;`/account/recharges` 列表响应明确为 `RechargeRecord[]`(新增类型);`/characters` 当前返回扁平数组而非分页;新增 §3.0 P0 接入清单 |
