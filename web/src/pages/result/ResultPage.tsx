@@ -37,9 +37,9 @@ export function ResultPage() {
   const fmtDuration = (s: number) =>
     `${Math.floor(s / 60)} 分 ${String(s % 60).padStart(2, "0")} 秒`;
   const characterCount = project.global.characters?.length ?? 0;
-  const audioLineCount = project.shots.filter(
-    (s) => s.lines?.audio_url || s.mono?.audio_url || s.narration?.audio_url,
-  ).length;
+  const audioLineCount =
+    project.shots.filter((s) => s.lines?.text || s.mono?.text).length +
+    (project.global.narration_audio_url ? 1 : 0);
 
   const goEdit = () => navigate(`/projects/${project.id}/edit`);
 

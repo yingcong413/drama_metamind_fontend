@@ -1,3 +1,4 @@
+import { StrengthSlider } from "@/components/primitives/StrengthSlider";
 import type { Shot } from "@/types";
 
 interface Props {
@@ -13,7 +14,8 @@ const STEPS = [
 
 export function FAction({ value, set }: Props) {
   return (
-    <div className="field-row-3">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="field-row-3">
       {STEPS.map((step, i) => (
         <div key={step.k}>
           <div
@@ -46,6 +48,12 @@ export function FAction({ value, set }: Props) {
           />
         </div>
       ))}
+      </div>
+      <StrengthSlider
+        label="动作强度"
+        value={value.action_strength}
+        onChange={(v) => set({ ...value, action_strength: v })}
+      />
     </div>
   );
 }

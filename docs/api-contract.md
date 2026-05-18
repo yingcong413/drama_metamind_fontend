@@ -1,4 +1,4 @@
-# 制影 AI · 短剧工坊 — 前后端接口契约 v0.2
+# 制影 AI · 短剧工坊 — 前后端接口契约 v0.4
 
 > 本文档基于 Claude Design 输出的 UI 原型（`metamind_duanju-handoff.zip`）梳理而来，覆盖原型中全部交互点。
 > 前端：React + TypeScript。后端：Go。AI 视频生成调用「new API（ApiGo VIP）」平台模型，由后端代理，前端只与本服务交互。
@@ -145,35 +145,44 @@ export interface Project {
   updated_at: string;
 }
 
-// 字段 01-06
+// 全局层（编辑器「全局场景层」面板，字段 01-10）
 export interface GlobalLayer {
-  season: "春" | "夏" | "秋" | "冬" | null;     // 01
-  time_of_day: "清晨" | "白天" | "黄昏" | "黑夜" | null;
-  scene_images: string[];            // 02 上传图 URL 列表
-  scene_selected: number | null;     // 当前生效的索引
-  position_image_url: string | null; // 03 站位草图
-  style: string[];                   // 04 影像风格，多选
-  characters: string[];              // 05 角色 ID 列表（必填）
-  story: string;                     // 06 故事内容（必填，建议 50-200 字）
+  total_duration_seconds: number | null; // 01 视频总时长（必填，秒；常用 5/10/15，也可自定义正整数）
+  scene_images: string[];                // 02 场景参考图 URL（单图，数组长度 ≤ 1；多视角请拼成一张）
+  scene_selected: number | null;         // 生效索引（单图时为 0 或 null）
+  position_image_url: string | null;     // 03 站位图（单图）
+  style: string[];                       // 04 影像风格（单选，数组长度 ≤ 1）
+  characters: string[];                  // 05 角色 ID 列表（必填）
+  story: string;                         // 06 故事内容（必填，建议 50-200 字）
+  // 07 环境音效 / 08 字幕 / 09 背景音乐 → 见 OutputLayer
+  narration_audio_url: string | null;    // 10 旁白音频：整支视频统一上传的旁白配音（可选）
 }
 
-// 字段 07-14
+// 分镜层（字段 11-20；另有步骤 00「本分镜出场角色」对应 cast_ids）
 export interface Shot {
   id: string;
   name: string;
   order: number;                     // 排序权重，由后端维护
-  cast_ids: string[];                // 本分镜出场角色 ID（必须为 project.global.characters 子集）
-  action: { start: string; mid: string; end: string };       // 07
-  micro:  { eyes: string; look: string; emotion: string };   // 08
-  gesture: string;                   // 09
-  camera: CameraMove[];              // 10
-  lines:     SpeechBlock | null;     // 11 台词
-  mono:      SpeechBlock | null;     // 12 内心独白
-  narration: SpeechBlock | null;     // 13 旁白（charId 始终为 null）
-  sfx: string;                       // 14 关键动作音效
+  cast_ids: string[];                // 步骤00 出场角色 ID（须为 global.characters 子集）
+  shot_size: string | null;          // 11 景别（单选，取值见 §2.2.1；可空）
+  duration_seconds: number | null;   // 12 分镜时长分配（选填，秒；留空由后端在总时长内均摊）
+  action: ActionBlock;               // 13 角色动作（必填）
+  action_strength: number;           // 13 动作强度 0-100（整数，默认 65，建议 60-70）
+  micro: MicroBlock;                 // 14 微表情控制
+  micro_strength: number;            // 14 微表情强度 0-100（默认 65）
+  gesture: string;                   // 15 小动作控制
+  gesture_strength: number;          // 15 小动作强度 0-100（默认 65）
+  camera: CameraMove[];              // 16 摄像机运动（单选，数组长度 ≤ 1）
+  lines:     SpeechBlock | null;     // 17 台词（仅文字；配音由角色参考音色合成）
+  mono:      SpeechBlock | null;     // 18 内心独白（仅文字；同上）
+  narration: SpeechBlock | null;     // 19 旁白（仅文字，char_id 恒 null；配音走 global.narration_audio_url）
+  sfx: string;                       // 20 关键动作音效
 }
 
-export interface CameraMove {
+export interface ActionBlock { start: string; mid: string; end: string; }
+export interface MicroBlock  { eyes: string; look: string; emotion: string; }
+
+export interface CameraMove {        // 注：Shot.camera 为单选，数组长度 ≤ 1
   id: "push_in" | "pull_out" | "pan_l" | "pan_r" | "tilt_u" | "tilt_d"
      | "boom_u" | "boom_d" | "follow" | "orbit" | "dolly_zoom" | "whip_pan"
      | "aerial" | "handheld" | "pov" | "ots";
@@ -184,17 +193,33 @@ export interface CameraMove {
 
 export interface SpeechBlock {
   char_id: string | null;            // narration 时为 null
-  text: string;
-  audio_url: string | null;          // 用户上传的参考音频
+  text: string;                      // 客户端只填这个
+  audio_url: string | null;          // 客户端不再上传；后端用角色参考音色合成后回填结果 URL（入参恒为 null）
 }
 
-// 字段 15-17
+// 输出层（随 global 一起在「全局场景层」面板展示，字段 07-09）
 export interface OutputLayer {
-  ambient_sfx: string;
-  subtitle: boolean;
-  music: boolean;
+  ambient_sfx: string;               // 07 环境音效
+  subtitle: boolean;                 // 08 字幕
+  music: boolean;                    // 09 背景音乐
 }
 ```
+
+#### 2.2.1 景别 `shot_size` 取值表（单选）
+
+前端硬编码于 `web/src/lib/fieldDefs.ts` 的 `SHOT_SIZES`；存储 `id`，UI 显示中英文。
+
+| id    | 中文   | English             |
+| ----- | ------ | ------------------- |
+| `els` | 大远景 | Extreme Long Shot   |
+| `ls`  | 远景   | Long Shot           |
+| `fs`  | 全景   | Full Shot           |
+| `mls` | 中全景 | Medium Long Shot    |
+| `ms`  | 中景   | Medium Shot         |
+| `mcu` | 中近景 | Medium Close-Up     |
+| `cu`  | 近景   | Close-Up            |
+| `bcu` | 特写   | Big Close-Up        |
+| `ecu` | 大特写 | Extreme Close-Up    |
 
 ```go
 // back: internal/model/project.go
@@ -216,30 +241,35 @@ type Project struct {
 }
 
 type GlobalLayer struct {
-    Season           *string  `json:"season"`
-    TimeOfDay        *string  `json:"time_of_day"`
-    SceneImages      []string `json:"scene_images"`
-    SceneSelected    *int     `json:"scene_selected"`
-    PositionImageURL *string  `json:"position_image_url"`
-    Style            []string `json:"style"`
-    Characters       []string `json:"characters"`
-    Story            string   `json:"story"`
+    TotalDurationSeconds *int     `json:"total_duration_seconds"` // 01 必填
+    SceneImages          []string `json:"scene_images"`           // 02 单图，len ≤ 1
+    SceneSelected        *int     `json:"scene_selected"`
+    PositionImageURL     *string  `json:"position_image_url"`     // 03 单图
+    Style                []string `json:"style"`                  // 04 单选，len ≤ 1
+    Characters           []string `json:"characters"`             // 05 必填
+    Story                string   `json:"story"`                  // 06 必填
+    NarrationAudioURL    *string  `json:"narration_audio_url"`    // 10 旁白音频，整支视频统一上传
 }
 
 type Shot struct {
-    ID        string       `json:"id" gorm:"primaryKey"`
-    ProjectID string       `json:"-" gorm:"index"`
-    Name      string       `json:"name"`
-    Order     int          `json:"order"`
-    CastIDs   []string     `json:"cast_ids" gorm:"serializer:json"`
-    Action    ActionBlock  `json:"action" gorm:"serializer:json"`
-    Micro     MicroBlock   `json:"micro" gorm:"serializer:json"`
-    Gesture   string       `json:"gesture"`
-    Camera    []CameraMove `json:"camera" gorm:"serializer:json"`
-    Lines     *SpeechBlock `json:"lines" gorm:"serializer:json"`
-    Mono      *SpeechBlock `json:"mono" gorm:"serializer:json"`
-    Narration *SpeechBlock `json:"narration" gorm:"serializer:json"`
-    SFX       string       `json:"sfx"`
+    ID              string       `json:"id" gorm:"primaryKey"`
+    ProjectID       string       `json:"-" gorm:"index"`
+    Name            string       `json:"name"`
+    Order           int          `json:"order"`
+    CastIDs         []string     `json:"cast_ids" gorm:"serializer:json"` // 步骤00
+    ShotSize        *string      `json:"shot_size"`              // 11 景别单选 id
+    DurationSeconds *int         `json:"duration_seconds"`       // 12 选填
+    Action          ActionBlock  `json:"action" gorm:"serializer:json"`
+    ActionStrength  int          `json:"action_strength"`        // 0-100，默认 65
+    Micro           MicroBlock   `json:"micro" gorm:"serializer:json"`
+    MicroStrength   int          `json:"micro_strength"`         // 0-100，默认 65
+    Gesture         string       `json:"gesture"`
+    GestureStrength int          `json:"gesture_strength"`       // 0-100，默认 65
+    Camera          []CameraMove `json:"camera" gorm:"serializer:json"` // 单选，len ≤ 1
+    Lines           *SpeechBlock `json:"lines" gorm:"serializer:json"`
+    Mono            *SpeechBlock `json:"mono" gorm:"serializer:json"`
+    Narration       *SpeechBlock `json:"narration" gorm:"serializer:json"`
+    SFX             string       `json:"sfx"`
 }
 // ActionBlock / MicroBlock / CameraMove / SpeechBlock / OutputLayer 略
 ```
@@ -435,7 +465,7 @@ P0 全做完就能联调跑起来 6 个页面。
 | Method | Path               | 说明                              |
 | ------ | ------------------ | --------------------------------- |
 | POST   | `/uploads/image`   | 上传图像（场景 / 站位 / 角色参考）|
-| POST   | `/uploads/audio`   | 上传音频（台词 / 独白 / 旁白 / 声线）|
+| POST   | `/uploads/audio`   | 上传音频（全局旁白配音 / 角色声线）|
 
 约定使用 **`multipart/form-data`**。
 
@@ -456,7 +486,9 @@ P0 全做完就能联调跑起来 6 个页面。
 #### POST `/uploads/audio`
 表单字段：
 - `file` (binary) — mp3/wav/m4a，≤ 20 MB
-- `purpose` (string) — `lines` | `mono` | `narration` | `voice_sample`
+- `purpose` (string) — `narration`（全局旁白音频，上传后写入 `global.narration_audio_url`）| `voice_sample`（角色声线参考，写入 `character.voice_sample_url`）
+
+> 台词 / 内心独白不再单独上传音频：客户端只提交文字，后端用对应角色在角色库里的 `voice_sample_url` 参考音色合成配音，结果回填到 `SpeechBlock.audio_url`。
 
 响应包含 `duration_seconds`。
 
@@ -540,11 +572,15 @@ Query：
 全量保存，请求体为完整 `Project`（不含只读字段）。用于编辑器顶部「保存」按钮。**前端在字段失焦时也可调 PATCH 做增量保存。**
 
 校验规则（后端必须实现，前端也同步实现一份做即时提示）：
+- `global.total_duration_seconds != null && > 0`（视频总时长必填）
 - `global.characters.length >= 1`
 - `global.story.length >= 1`
 - 每个 `shot.action.start || mid || end` 至少一项非空
 - `shot.cast_ids` ⊆ `global.characters`
 - `shot.lines.char_id`、`shot.mono.char_id` ∈ `shot.cast_ids`
+- 单选字段数组长度 ≤ 1：`global.style`、`shot.camera`
+- 强度字段 `shot.action_strength / micro_strength / gesture_strength` ∈ [0,100]，缺省 65
+- `shot.shot_size` 为 §2.2.1 表中的 id 或 null
 
 校验失败返回 `42201` + `errors[]`。
 
@@ -681,11 +717,10 @@ Query：
 响应：
 ```json
 { "code": 0, "data": {
-  "seasons": ["春","夏","秋","冬"],
-  "time_of_day": ["清晨","白天","黄昏","黑夜"],
-  "styles": ["真人实拍","电影感","二次元","写实CG","水墨","赛博朋克","纪录片","漫画分格"],
+  "styles": ["2D 动画","3D 动画","真人实拍","黑白","线条风格"],
+  "shot_sizes": [ /* 参考 §2.2.1：{id,cn,en} 列表 */ ],
   "tags": ["女主","男主","配角","路人","都市","校园","成熟","少年","古风"],
-  "camera_moves": [ /* 参考 data.jsx#CAMERA_MOVES 的完整结构 */ ],
+  "camera_moves": [ /* 参考 fieldDefs.ts#CAMERA_MOVES 的完整结构 */ ],
   "speed_options": ["慢","中","快"],
   "magnitude_options": ["小","中","大"],
   "direction_options": ["左","右","上","下"],
@@ -721,7 +756,7 @@ Query：
 | **编辑器** 添加 / 复制 / 删除分镜     | `POST /shots` / `POST /shots/:id/duplicate` / `DELETE /shots/:id`        |
 | **编辑器** 拖拽分镜排序               | `POST /shots/reorder`                                                    |
 | **编辑器** 上传场景图 / 站位图        | `POST /uploads/image`，拿到 url 后 PATCH 进 `global.scene_images`        |
-| **编辑器** 字段 11/12/13 上传音频     | `POST /uploads/audio`                                                    |
+| **编辑器** 全局层"旁白音频"上传       | `POST /uploads/audio`（`purpose=narration`）→ url 写入 `global.narration_audio_url` |
 | **编辑器** "保存"按钮                 | `POST /projects/:id/save`                                                |
 | **编辑器** 右侧"结构化 / 自然语言"预览 | `POST /prompt/preview`（每次 project 变更后 debounce 500ms 调一次）       |
 | **编辑器** 右侧"AI 润色"              | `POST /prompt/polish`                                                    |
@@ -752,7 +787,10 @@ Query：
 1. **生成进度推送方式**：SSE vs WebSocket vs 轮询。本文档默认 SSE + 降级轮询，可改。
 2. **任务并发限制**：每用户同时进行中的任务上限？超过返回 `42901`？
 3. **成本预估**：是否需要 `POST /projects/:id/estimate-cost` 在用户点"生成视频"前展示"本次将消耗 ¥XX"？强烈建议加。
-4. **分镜音频上传是覆盖还是追加**：现原型一个分镜每个字段最多一段音频，建议覆盖。
+4. **台词/独白配音合成时机**：客户端只提交文字，后端用角色 `voice_sample_url` 合成。需确认合成是在"生成视频"时一起做，还是字段保存后异步预合成并回填 `SpeechBlock.audio_url`。
+11. **时长分配策略**：部分分镜填了 `duration_seconds`、部分留空时，剩余时长如何在留空分镜间均摊？是否允许已填总和 > `global.total_duration_seconds`（前端已做软提示，后端是否硬校验拒绝）。
+12. **强度字段语义**：`action/micro/gesture_strength`（0-100）后端如何映射到模型参数？是否需要 min/max 边界以外的离散档位。
+13. **景别 `shot_size`**：枚举是否进 `/meta/options` 由后端下发，还是前后端各维护一份常量（当前前端硬编码 §2.2.1）。
 5. **角色删除**：若角色已被某项目 `global.characters` 引用，是阻止删除（返回冲突）还是级联清理？建议阻止 + 返回引用列表。
 6. **项目封面**：自动从首个分镜生成快照？还是用户手动上传？原型里 `cover_url` 留空时用 `hue` 渲染色块占位。
 7. **微信 / 支付宝回调地址**：后端需注册支付平台的 webhook，订单状态以 webhook 为准，前端轮询只是 UX。
@@ -768,3 +806,5 @@ Query：
 | ------ | ------------ | ----------------------------- |
 | v0.1   | 2026-05-17   | 初版，覆盖原型全部交互        |
 | v0.2   | 2026-05-18   | 按 v0.1 前端实际代码对齐:`GenerationTask.type` 改为对象 `TaskTypeInfo`、补 `user` 字段;`/account/recharges` 列表响应明确为 `RechargeRecord[]`(新增类型);`/characters` 当前返回扁平数组而非分页;新增 §3.0 P0 接入清单 |
+| v0.3   | 2026-05-18   | 旁白音频改为全局统一上传:`GlobalLayer` 新增 `narration_audio_url`;分镜的台词/内心独白/旁白改为**仅文字**,台词/独白配音由角色 `voice_sample_url` 后端合成回填 `SpeechBlock.audio_url`;`/uploads/audio` 的 `purpose` 收敛为 `narration`(全局旁白)\| `voice_sample`(角色声线) |
+| v0.4   | 2026-05-18   | 按编辑器最新改动整体对齐:① 移除时间模块(`GlobalLayer.season/time_of_day` 删除,`/meta/options` 去掉 `seasons/time_of_day`);② `GlobalLayer` 新增 `total_duration_seconds`(视频总时长,必填);③ `Shot` 新增 `shot_size`(景别,单选,见 §2.2.1)、`duration_seconds`(分镜时长,选填)、`action_strength/micro_strength/gesture_strength`(强度 0-100,默认 65);④ `global.style`、`shot.camera` 改为**单选**(数组长度 ≤ 1);⑤ 场景/站位图均为**单图**;⑥ 字段编号整体重排:全局 01-10、分镜 11-20(另有分镜步骤 00 出场角色);⑦ `/meta/options.styles` 更新为实际 5 项并新增 `shot_sizes`;§3.4 校验规则补充 |

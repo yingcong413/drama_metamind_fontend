@@ -10,6 +10,7 @@ interface Props {
   kind: SpeechKind;
   characters: Character[];
   bindCharacter?: boolean;
+  withAudio?: boolean;
   accentVar?: string;
   shotCharOptions?: string[];
 }
@@ -23,6 +24,7 @@ const PLACEHOLDERS: Record<SpeechKind, string> = {
 export function FSpeech({
   value, set, kind, characters,
   bindCharacter = true,
+  withAudio = true,
   accentVar = "--layer-shot",
   shotCharOptions,
 }: Props) {
@@ -86,6 +88,7 @@ export function FSpeech({
         />
       </div>
 
+      {withAudio && (
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <div
           className="dim-2"
@@ -129,6 +132,7 @@ export function FSpeech({
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }

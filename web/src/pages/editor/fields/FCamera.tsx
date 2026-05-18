@@ -28,11 +28,11 @@ export function FCamera({ value, set }: Props) {
 
   const toggle = (id: CameraMoveId) => {
     if (selectedIds.has(id)) {
-      set({ ...value, camera: moves.filter((m) => m.id !== id) });
+      set({ ...value, camera: [] });
     } else {
       set({
         ...value,
-        camera: [...moves, { id, speed: "中", magnitude: "中", direction: null }],
+        camera: [{ id, speed: "中", magnitude: "中", direction: null }],
       });
     }
   };
@@ -80,7 +80,7 @@ export function FCamera({ value, set }: Props) {
               textTransform: "uppercase", marginBottom: 10,
             }}
           >
-            已选 · {moves.length} 个运镜 · 调整参数
+已选运镜 · 调整参数
           </div>
           {moves.map((m) => {
             const meta = findMoveMeta(m.id);

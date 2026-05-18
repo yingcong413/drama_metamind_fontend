@@ -16,7 +16,7 @@ export const FIELD_DEFS: {
   shot: FieldDef[];
 } = {
   global: [
-    { num: "01", id: "time",       title: "时间",       tags: ["opt"],              dataLayer: "global" },
+    { num: "01", id: "duration",   title: "视频总时长", tags: ["req"],              dataLayer: "global" },
     { num: "02", id: "scene",      title: "场景",       tags: ["upload"],           dataLayer: "global" },
     { num: "03", id: "position",   title: "站位图",     tags: ["opt", "upload"],    dataLayer: "global" },
     { num: "04", id: "style",      title: "影像风格",   tags: ["opt"],              dataLayer: "global" },
@@ -25,29 +25,33 @@ export const FIELD_DEFS: {
     { num: "07", id: "ambientSfx", title: "环境音效",   tags: ["opt"],              dataLayer: "output" },
     { num: "08", id: "subtitle",   title: "字幕",       tags: ["opt"],              dataLayer: "output" },
     { num: "09", id: "music",      title: "背景音乐",   tags: ["opt"],              dataLayer: "output" },
+    { num: "10", id: "narrationAudio", title: "旁白音频", tags: ["opt", "audio"],   dataLayer: "global" },
   ],
   shot: [
-    { num: "10", id: "action",    title: "角色动作",     tags: ["req"] },
-    { num: "11", id: "micro",     title: "微表情控制",   tags: ["opt"] },
-    { num: "12", id: "gesture",   title: "小动作控制",   tags: ["opt"] },
-    { num: "13", id: "camera",    title: "摄像机运动",   tags: ["opt"] },
-    { num: "14", id: "lines",     title: "台词",         tags: ["opt", "audio"] },
-    { num: "15", id: "mono",      title: "内心独白",     tags: ["opt", "audio"] },
-    { num: "16", id: "narration", title: "旁白",         tags: ["opt", "audio"] },
-    { num: "17", id: "sfx",       title: "关键动作音效", tags: ["opt"] },
+    { num: "11", id: "shotSize",  title: "景别",         tags: ["opt"] },
+    { num: "12", id: "duration",  title: "分镜时长分配", tags: ["opt"] },
+    { num: "13", id: "action",    title: "角色动作",     tags: ["req"] },
+    { num: "14", id: "micro",     title: "微表情控制",   tags: ["opt"] },
+    { num: "15", id: "gesture",   title: "小动作控制",   tags: ["opt"] },
+    { num: "16", id: "camera",    title: "摄像机运动",   tags: ["opt"] },
+    { num: "17", id: "lines",     title: "台词",         tags: ["opt"] },
+    { num: "18", id: "mono",      title: "内心独白",     tags: ["opt"] },
+    { num: "19", id: "narration", title: "旁白",         tags: ["opt"] },
+    { num: "20", id: "sfx",       title: "关键动作音效", tags: ["opt"] },
   ],
 };
 
 export const MODULE_HELPS: Record<string, string> = {
-  "g.time":       "通过勾选确定季节与时段，模型据此调整光线与色温。",
-  "g.scene":      "上传一张或多张场景参考图。单张时自动启用；多张可手动选定主场景。",
+  "g.duration":   "整支视频的目标总时长，必填。常用 5 / 10 / 15 秒，也可自定义。各分镜可在「分镜时长分配」里单独指定，留空的分镜由系统在总时长内自动均摊。",
+  "g.scene":      "上传场景参考图。如果是多视角场景，请把多个视角拼成一张图片再上传；上传多张时可手动选定主场景。",
   "g.position":   "用一张简笔示意角色在画面中的相对位置，避免模型自由发挥。",
-  "g.style":      "勾选整支视频的视觉表现形式，可多选叠加。",
+  "g.style":      "选择整支视频的视觉表现形式（单选）。",
   "g.characters": "从角色库选择本剧涉及的角色，未在此处出现的角色无法在分镜里被引用。",
   "g.story":      "整支视频的叙事骨架。建议 50–200 字，过短信息不足，过长易被截断。",
   "g.ambientSfx": "贯穿整支视频的背景声场，单条输入即可。",
   "g.subtitle":   "是否为整支视频生成字幕，默认关闭。",
   "g.music":      "是否生成贯穿全片的背景音乐，默认关闭。",
+  "g.narrationAudio": "上传整支视频的旁白配音音频，对应各分镜里填写的旁白文字。单条上传即可。",
 };
 
 export interface CameraMoveMeta {
@@ -87,6 +91,24 @@ export const CAMERA_TIER_LABEL: Record<string, string> = {
   advanced: "进阶运动",
   special: "特殊视角",
 };
+
+export interface ShotSizeMeta {
+  id: string;
+  cn: string;
+  en: string;
+}
+
+export const SHOT_SIZES: ShotSizeMeta[] = [
+  { id: "els", cn: "大远景", en: "Extreme Long Shot" },
+  { id: "ls",  cn: "远景",   en: "Long Shot" },
+  { id: "fs",  cn: "全景",   en: "Full Shot" },
+  { id: "mls", cn: "中全景", en: "Medium Long Shot" },
+  { id: "ms",  cn: "中景",   en: "Medium Shot" },
+  { id: "mcu", cn: "中近景", en: "Medium Close-Up" },
+  { id: "cu",  cn: "近景",   en: "Close-Up" },
+  { id: "bcu", cn: "特写",   en: "Big Close-Up" },
+  { id: "ecu", cn: "大特写", en: "Extreme Close-Up" },
+];
 
 export const SPEED_OPTS = ["慢", "中", "快"] as const;
 export const MAGNITUDE_OPTS = ["小", "中", "大"] as const;

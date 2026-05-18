@@ -1,3 +1,4 @@
+import { StrengthSlider } from "@/components/primitives/StrengthSlider";
 import type { MicroBlock, Shot } from "@/types";
 
 interface Props {
@@ -13,7 +14,8 @@ const ROWS: Array<{ k: keyof MicroBlock; label: string; ph: string }> = [
 
 export function FMicro({ value, set }: Props) {
   return (
-    <div className="field-row-3">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="field-row-3">
       {ROWS.map((r) => (
         <div key={r.k}>
           <div
@@ -33,6 +35,12 @@ export function FMicro({ value, set }: Props) {
           />
         </div>
       ))}
+      </div>
+      <StrengthSlider
+        label="微表情强度"
+        value={value.micro_strength}
+        onChange={(v) => set({ ...value, micro_strength: v })}
+      />
     </div>
   );
 }

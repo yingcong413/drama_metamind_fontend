@@ -12,8 +12,6 @@ export interface CameraMoveOption {
 }
 
 export interface MetaOptions {
-  seasons: string[];
-  time_of_day: string[];
   styles: string[];
   tags: string[];
   camera_moves: {

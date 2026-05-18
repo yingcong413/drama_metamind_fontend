@@ -31,24 +31,29 @@ export interface MicroBlock {
 }
 
 export interface GlobalLayer {
-  season: "春" | "夏" | "秋" | "冬" | null;
-  time_of_day: "清晨" | "白天" | "黄昏" | "黑夜" | null;
+  total_duration_seconds: number | null;
   scene_images: string[];
   scene_selected: number | null;
   position_image_url: string | null;
   style: string[];
   characters: string[];
   story: string;
+  narration_audio_url: string | null;
 }
 
 export interface Shot {
   id: string;
   name: string;
   order: number;
+  shot_size: string | null;
+  duration_seconds: number | null;
   cast_ids: string[];
   action: ActionBlock;
+  action_strength: number;
   micro: MicroBlock;
+  micro_strength: number;
   gesture: string;
+  gesture_strength: number;
   camera: CameraMove[];
   lines: SpeechBlock | null;
   mono: SpeechBlock | null;
