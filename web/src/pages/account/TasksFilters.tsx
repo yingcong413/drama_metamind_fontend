@@ -1,4 +1,6 @@
 import { SearchIcon } from "@/components/icons";
+import { useIsOwner, useAccountType } from "@/stores/auth";
+import { cn } from "@/lib/cn";
 import type { TaskStatus } from "@/types";
 
 export interface TaskFilters {
@@ -7,6 +9,10 @@ export interface TaskFilters {
   task_id: string;
   status: TaskStatus | "all";
   resolution: "720p" | "1080p" | "all";
+  /** PRD v0.9 §1.5.3:Owner 可在「我的」/「全公司」之间切换;Member 锁死「我的」 */
+  scope: "mine" | "all";
+  /** PRD v0.9 §10.6:Owner 在全公司视图点 TOP 提交人后,锁到那个人的任务 */
+  cast_user_id?: string;
 }
 
 interface Props {
@@ -15,10 +21,43 @@ interface Props {
 }
 
 export function TasksFilters({ filters, setFilters }: Props) {
+  const isOwner = useIsOwner();
+  const accountType = useAccountType();
+  // 只有企业 Owner 才看到「我的 / 全公司」tab;个人 Owner / Member 都没必要
+  const showScopeTab = isOwner && accountType === "enterprise";
+
   const reset = () =>
-    setFilters({ date_from: "", date_to: "", task_id: "", status: "all", resolution: "all" });
+    setFilters({
+      date_from: "",
+      date_to: "",
+      task_id: "",
+      status: "all",
+      resolution: "all",
+      scope: showScopeTab ? filters.scope : "mine",
+    });
   return (
     <div className="tasks-filters">
+      {showScopeTab && (
+        <div
+          className="segmented"
+          style={{ marginBottom: 12, alignSelf: "flex-start" }}
+        >
+          <button
+            type="button"
+            className={cn(filters.scope === "mine" && "active")}
+            onClick={() => setFilters({ ...filters, scope: "mine" })}
+          >
+            我的任务
+          </button>
+          <button
+            type="button"
+            className={cn(filters.scope === "all" && "active")}
+            onClick={() => setFilters({ ...filters, scope: "all" })}
+          >
+            全公司任务
+          </button>
+        </div>
+      )}
       <div className="tasks-filter-row">
         <div className="tasks-filter date">
           <span className="dim-2 mono" style={{ fontSize: 10 }}>提交时间</span>

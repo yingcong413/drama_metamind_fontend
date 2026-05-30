@@ -4,14 +4,18 @@ import { FIELD_DEFS, MODULE_HELPS } from "@/lib/fieldDefs";
 import type { Character, GlobalLayer, OutputLayer } from "@/types";
 import { FScene } from "./fields/FScene";
 import { FPosition } from "./fields/FPosition";
+import { FProp } from "./fields/FProp";
 import { FStyle } from "./fields/FStyle";
 import { FCharacters } from "./fields/FCharacters";
 import { FStory } from "./fields/FStory";
+import { FImageQuality } from "./fields/FImageQuality";
 import { FAmbientSfx } from "./fields/FAmbientSfx";
 import { FSubtitle } from "./fields/FSubtitle";
 import { FToggle } from "./fields/FToggle";
 import { FNarrationAudio } from "./fields/FNarrationAudio";
 import { FDuration } from "./fields/FDuration";
+import { FRatio } from "./fields/FRatio";
+import { FResolution } from "./fields/FResolution";
 
 interface Props {
   global: GlobalLayer;
@@ -27,13 +31,18 @@ export function GlobalLayerView({ global, setGlobal, output, setOutput, characte
     const o = { value: output, set: setOutput };
     switch (id) {
       case "duration":   return <FDuration {...g} />;
+      case "ratio":      return <FRatio {...g} />;
+      case "resolution": return <FResolution {...g} />;
       case "scene":      return <FScene {...g} />;
       case "position":   return <FPosition {...g} />;
+      case "prop":       return <FProp {...g} />;
       case "style":      return <FStyle {...g} />;
       case "characters": return <FCharacters {...g} characters={characters} />;
       case "story":      return <FStory {...g} />;
+      case "imageQuality": return <FImageQuality {...g} />;
       case "ambientSfx": return <FAmbientSfx {...o} />;
       case "subtitle":   return <FSubtitle {...o} />;
+      case "generateAudio": return <FToggle {...o} k="generate_audio" on="开启" off="关闭" defaultLabel="on" />;
       case "music":      return <FToggle {...o} k="music" />;
       case "narrationAudio": return <FNarrationAudio {...g} />;
     }

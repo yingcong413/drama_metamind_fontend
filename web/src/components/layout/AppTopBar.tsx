@@ -1,10 +1,11 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Avatar } from "@/components/primitives/Avatar";
 import { BellIcon, MoonIcon, SunIcon } from "@/components/icons";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore, useCanManageOrg, useIsPlatformAdmin } from "@/stores/auth";
 import { useThemeStore } from "@/stores/theme";
 import { cn } from "@/lib/cn";
+import { ChangePasswordDialog } from "@/pages/account/ChangePasswordDialog";
 
 export interface Crumb {
   label: string;
@@ -31,9 +32,43 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
   const toggle = useThemeStore((s) => s.toggle);
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const canManageOrg = useCanManageOrg();
+  const isPlatformAdmin = useIsPlatformAdmin();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const menuWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // 点外面关菜单
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (!menuWrapRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [menuOpen]);
 
   const onAvatarClick = () => {
-    navigate(token ? "/account" : "/login");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    setMenuOpen((v) => !v);
+  };
+
+  const go = (path: string) => {
+    setMenuOpen(false);
+    navigate(path);
+  };
+
+  const onLogout = () => {
+    setMenuOpen(false);
+    logout();
+    navigate("/login");
   };
 
   return (
@@ -81,21 +116,153 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
           <BellIcon />
         </button>
         {actions}
-        <button
-          onClick={onAvatarClick}
-          title={token ? `${user?.name ?? "我"} · 查看账户` : "登录"}
-          style={{
-            padding: 0,
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            display: "inline-flex",
-            borderRadius: "50%",
-          }}
-        >
-          <Avatar name={user?.name ?? "你"} />
-        </button>
+
+        <div ref={menuWrapRef} style={{ position: "relative" }}>
+          <button
+            onClick={onAvatarClick}
+            title={token ? `${user?.name ?? "我"}` : "登录"}
+            style={{
+              padding: 0,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              display: "inline-flex",
+              borderRadius: "50%",
+            }}
+          >
+            <Avatar name={user?.name ?? "你"} />
+          </button>
+
+          {menuOpen && token && (
+            <div
+              role="menu"
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                right: 0,
+                minWidth: 220,
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                boxShadow: "0 12px 36px rgba(0,0,0,.35)",
+                padding: 6,
+                zIndex: 100,
+              }}
+            >
+              {/* 用户信息预览 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderBottom: "1px solid var(--border)",
+                  marginBottom: 4,
+                }}
+              >
+                <Avatar name={user?.name ?? "你"} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {user?.name ?? "未命名"}
+                  </div>
+                  <div
+                    className="dim-2 mono"
+                    style={{ fontSize: 11, marginTop: 2 }}
+                  >
+                    {user?.phone ?? "未绑定手机"}
+                  </div>
+                </div>
+              </div>
+
+              <MenuItem onClick={() => go("/account")}>账户与计费</MenuItem>
+              {canManageOrg && (
+                <MenuItem onClick={() => go("/org")}>
+                  组织管理
+                  <span
+                    className="dim-2 mono"
+                    style={{ fontSize: 10, marginLeft: 6 }}
+                  >
+                    Owner
+                  </span>
+                </MenuItem>
+              )}
+              {isPlatformAdmin && (
+                <MenuItem onClick={() => go("/admin/recharge")}>
+                  平台管理 · 手动充值
+                  <span
+                    className="dim-2 mono"
+                    style={{ fontSize: 10, marginLeft: 6, color: "oklch(72% .14 70)" }}
+                  >
+                    ADMIN
+                  </span>
+                </MenuItem>
+              )}
+              {isPlatformAdmin && (
+                <MenuItem onClick={() => go("/admin/create-org")}>
+                  平台管理 · 替人开企业
+                  <span
+                    className="dim-2 mono"
+                    style={{ fontSize: 10, marginLeft: 6, color: "oklch(72% .14 70)" }}
+                  >
+                    ADMIN
+                  </span>
+                </MenuItem>
+              )}
+              <MenuItem
+                onClick={() => {
+                  setMenuOpen(false);
+                  setShowPwd(true);
+                }}
+              >
+                修改密码
+              </MenuItem>
+              <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+              <MenuItem onClick={onLogout} danger>
+                退出登录
+              </MenuItem>
+            </div>
+          )}
+        </div>
       </div>
+
+      {showPwd && <ChangePasswordDialog onClose={() => setShowPwd(false)} />}
     </div>
+  );
+}
+
+function MenuItem({
+  children,
+  onClick,
+  danger = false,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        padding: "9px 12px",
+        textAlign: "left",
+        background: "transparent",
+        border: "none",
+        borderRadius: 6,
+        cursor: "pointer",
+        fontSize: 13,
+        color: danger ? "oklch(72% .15 25)" : "var(--text)",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.background = "var(--surface-2)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.background = "transparent";
+      }}
+    >
+      {children}
+    </button>
   );
 }

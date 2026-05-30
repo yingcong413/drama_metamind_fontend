@@ -1,0 +1,298 @@
+// 样本 fixture：青玉 / 李云霄 · 古装夜戏 6 秒 2 镜头
+// 用于：
+//   1) docs/validation/ 下「导演侧 prompt 格式审稿」工作流的输入
+//   2) lib/promptDoc.ts 与 lib/serialize.ts 的单元测试
+//   3) 编辑器右侧「结构化 / 自然语言」预览面板的演示数据
+//
+// 字段填满策略：按 PRD-v0.5 后的现有 Shot 模型字段全填，
+// 同时给每个 Character 挂上若干 Asset（含 ark_asset_id），
+// 让 serializer 能产出带 `asset://` URI 的完整 prompt 结构。
+
+import type { Asset, Character, Project } from "@/types";
+
+const NOW = "2026-05-19T10:00:00Z";
+const ORG_ID = "org_metamind_demo";
+// v0.7: ark_project_name 改 per-org 命名 `metamind-{org_id前 8}`
+const ARK_PROJECT = `metamind-${ORG_ID.slice(0, 8)}`;
+
+// ============ Assets ============
+
+export const qingyuAssets: Asset[] = [
+  {
+    id: "up_qy_img_001",
+    org_id: ORG_ID,
+    character_id: "c_qy",
+    kind: "image",
+    url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/a1b2c3d4_qy_front.jpg",
+    thumbnail_url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/a1b2c3d4_qy_front_thumb.jpg",
+    role_in_bundle: "primary",
+    original_filename: "qy_front.jpg",
+    size_bytes: 2_456_123,
+    ark_asset_id: "asset-20260518-qy0001",
+    status: "active",
+    processing_error: null,
+    width: 1080,
+    height: 1920,
+    duration_seconds: null,
+    fps: null,
+    mime: "image/jpeg",
+    uploaded_by: "u_director",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  {
+    id: "up_qy_img_002",
+    org_id: ORG_ID,
+    character_id: "c_qy",
+    kind: "image",
+    url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/e5f6g7h8_qy_side.jpg",
+    thumbnail_url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/e5f6g7h8_qy_side_thumb.jpg",
+    role_in_bundle: "side",
+    original_filename: "qy_side.jpg",
+    size_bytes: 1_987_654,
+    ark_asset_id: "asset-20260518-qy0002",
+    status: "active",
+    processing_error: null,
+    width: 1080,
+    height: 1920,
+    duration_seconds: null,
+    fps: null,
+    mime: "image/jpeg",
+    uploaded_by: "u_director",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  {
+    id: "up_qy_aud_001",
+    org_id: ORG_ID,
+    character_id: "c_qy",
+    kind: "audio",
+    url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/i9j0k1l2_qy_voice.mp3",
+    thumbnail_url: null,
+    role_in_bundle: "primary",
+    original_filename: "qy_voice.mp3",
+    size_bytes: 587_421,
+    ark_asset_id: "asset-20260518-qy0003",
+    status: "active",
+    processing_error: null,
+    width: null,
+    height: null,
+    duration_seconds: 8.2,
+    fps: null,
+    mime: "audio/mpeg",
+    uploaded_by: "u_director",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+];
+
+export const liyunxiaoAssets: Asset[] = [
+  {
+    id: "up_lyx_img_001",
+    org_id: ORG_ID,
+    character_id: "c_lyx",
+    kind: "image",
+    url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/m3n4o5p6_lyx_front.jpg",
+    thumbnail_url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/m3n4o5p6_lyx_front_thumb.jpg",
+    role_in_bundle: "primary",
+    original_filename: "lyx_front.jpg",
+    size_bytes: 2_134_567,
+    ark_asset_id: "asset-20260518-lyx0001",
+    status: "active",
+    processing_error: null,
+    width: 1080,
+    height: 1920,
+    duration_seconds: null,
+    fps: null,
+    mime: "image/jpeg",
+    uploaded_by: "u_director",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  {
+    id: "up_lyx_aud_001",
+    org_id: ORG_ID,
+    character_id: "c_lyx",
+    kind: "audio",
+    url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/q7r8s9t0_lyx_voice.mp3",
+    thumbnail_url: null,
+    role_in_bundle: "primary",
+    original_filename: "lyx_voice.mp3",
+    size_bytes: 612_348,
+    ark_asset_id: "asset-20260518-lyx0002",
+    status: "active",
+    processing_error: null,
+    width: null,
+    height: null,
+    duration_seconds: 7.8,
+    fps: null,
+    mime: "audio/mpeg",
+    uploaded_by: "u_director",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+];
+
+export const allFixtureAssets: Asset[] = [...qingyuAssets, ...liyunxiaoAssets];
+
+// ============ Characters ============
+
+export const qingyuCharacters: Character[] = [
+  {
+    id: "c_qy",
+    org_id: ORG_ID,
+    name: "青玉",
+    role: "女主",
+    desc: "古装持剑女子，冷峻面色，绝杀眼神，鬓发被夜风吹动；身着月白劲装，腰束银带",
+    tags: ["女主", "古风", "冷艳"],
+    asset_provider: "seegen",
+    ark_group_id: "group-20260518-qy",
+    ark_project_name: ARK_PROJECT,
+    asset_bundle: {
+      counts: { image: 2, video: 0, audio: 1 },
+      primary_image_url: qingyuAssets[0].url,
+      primary_video_url: null,
+      primary_audio_url: qingyuAssets[2].url,
+      primary_image_ark_asset_id: qingyuAssets[0].ark_asset_id,
+      primary_video_ark_asset_id: null,
+      primary_audio_ark_asset_id: qingyuAssets[2].ark_asset_id,
+      processing_count: 0,
+      failed_count: 0,
+    },
+    // 兼容字段（迁移期保留）
+    ref_image_url: qingyuAssets[0].url,
+    ref_images: qingyuAssets.filter((a) => a.kind === "image").map((a) => a.url!),
+    voice_sample_url: qingyuAssets[2].url,
+    hue: 210,
+    has_ref: true,
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  {
+    id: "c_lyx",
+    org_id: ORG_ID,
+    name: "李云霄",
+    role: "男配",
+    desc: "古装文弱书生模样，被压制时双眼圆睁、嘴大张做投降状；面白唇红，发束墨色丝带",
+    tags: ["男配", "古风", "书生"],
+    asset_provider: "seegen",
+    ark_group_id: "group-20260518-lyx",
+    ark_project_name: ARK_PROJECT,
+    asset_bundle: {
+      counts: { image: 1, video: 0, audio: 1 },
+      primary_image_url: liyunxiaoAssets[0].url,
+      primary_video_url: null,
+      primary_audio_url: liyunxiaoAssets[1].url,
+      primary_image_ark_asset_id: liyunxiaoAssets[0].ark_asset_id,
+      primary_video_ark_asset_id: null,
+      primary_audio_ark_asset_id: liyunxiaoAssets[1].ark_asset_id,
+      processing_count: 0,
+      failed_count: 0,
+    },
+    ref_image_url: liyunxiaoAssets[0].url,
+    ref_images: liyunxiaoAssets.filter((a) => a.kind === "image").map((a) => a.url!),
+    voice_sample_url: liyunxiaoAssets[1].url,
+    hue: 30,
+    has_ref: true,
+    created_at: NOW,
+    updated_at: NOW,
+  },
+];
+
+// ============ Project ============
+
+export const qingyuProject: Project = {
+  id: "p_qy_lyx_demo",
+  name: "青玉夜审 · Demo",
+  cover_url: null,
+  hue: 220,
+  status: "draft",
+  shot_count: 2,
+  duration_seconds: 6,
+  global: {
+    total_duration_seconds: 6,
+    ratio: "16:9",
+    resolution: "720p",
+    scene_image: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/scene_palace_night.jpg",
+    position_image_url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/position_qy_lyx.png",
+    prop_image_url: null,
+    style: ["真人实拍"],
+    characters: ["c_qy", "c_lyx"],
+    story:
+      "宫廷夜景。青玉长剑出鞘，剑锋指向李云霄面部，欲杀之。李云霄双手举过头顶喊停，谎称有礼物相赠。青玉听到「礼物」后从杀意转为疑惑，剑停在空中。",
+    image_quality: "电影感、低饱和、冷色调、夜景光影层次丰富",
+    narration_audio_url: null,
+  },
+  shots: [
+    {
+      id: "s_001",
+      name: "镜头 1 · 持剑欲刺 + 喊停",
+      order: 1,
+      shot_size: "mcu",
+      duration_seconds: 3,
+      cast_ids: ["c_qy", "c_lyx"],
+      action: {
+        start: "青玉长剑已出鞘，剑锋指向李云霄",
+        mid: "李云霄双眼圆睁，双手从身侧急速举过头顶，掌心向前做投降状。嘴巴大张",
+        end: "李云霄保持举手姿势，面部表情从惊恐转为讨好式堆笑。眼珠快速转动，在思考对策",
+      },
+      action_strength: 95,
+      micro: {
+        eyes: "瞳孔收缩 → 眼神从惊恐转为狡黠",
+        look: "眼珠快速左右转动显示在思考",
+        emotion: "惊恐 → 讨好",
+      },
+      micro_strength: 90,
+      gesture: "双手举过头顶后保持投降姿势",
+      gesture_strength: 80,
+      camera: [{ id: "push_in", speed: "快", magnitude: "大", direction: null }],
+      lines: {
+        char_id: "c_lyx",
+        text: "姑娘且慢！我是有礼物送给姑娘啊！",
+        audio_url: null,
+      },
+      mono: null,
+      narration: null,
+      sfx: "00:00.5 秒剑锋破风声 + 衣物摩擦声（举手）+ 远处虫鸣",
+    },
+    {
+      id: "s_002",
+      name: "镜头 2 · 杀意 → 疑惑",
+      order: 2,
+      shot_size: "bcu",
+      duration_seconds: 3,
+      cast_ids: ["c_qy"],
+      action: {
+        start: "青玉面色冷峻，长剑刺出姿势定格",
+        mid: "青玉眉头从紧锁逐渐松开。眼角肌肉从收紧转为放松。嘴唇从紧抿变为微微分开",
+        end: "青玉头微微歪向一侧（约 5 度），眼神中的杀意被疑惑取代。长剑停在空中，不再前进",
+      },
+      action_strength: 60,
+      micro: {
+        eyes: "眼神锐利如刀 → 柔和疑惑",
+        look: "瞳孔从收缩状态轻微放大；缓慢眨眼 1 次（约 00:05 秒）",
+        emotion: "杀意 → 疑惑",
+      },
+      micro_strength: 70,
+      gesture: "头微微歪向一侧约 5 度",
+      gesture_strength: 50,
+      camera: [{ id: "push_in", speed: "慢", magnitude: "小", direction: null }],
+      lines: {
+        char_id: "c_qy",
+        text: "嗯？",
+        audio_url: null,
+      },
+      mono: null,
+      narration: null,
+      sfx: "00:03 秒长剑破风声停止 + 青玉轻微呼吸声 + 00:04.5 秒疑惑的「嗯」声（上挑语调）",
+    },
+  ],
+  output: {
+    ambient_sfx: "宫廷夜景底噪 —— 远处风声、虫鸣、宫灯轻微吱呀声",
+    subtitle: true,
+    music: false,
+    generate_audio: true,
+  },
+  created_at: NOW,
+  updated_at: NOW,
+};

@@ -29,8 +29,12 @@ export interface GenerationTask {
   end_time: string | null;
   duration_seconds: number;
   video_len_seconds: number;
-  resolution: "720p" | "1080p";
+  resolution: "720p" | "1080p" | "4k";
   cost_cents: number;
+  /** v0.9.1 §10.8.2 token 用量(成功任务,来自 new-api usage.prompt_tokens) */
+  input_tokens?: number;
+  /** v0.9.1 §10.8.2 token 用量(成功任务,来自 new-api usage.completion_tokens) */
+  output_tokens?: number;
   fail_reason: string | null;
   output_video_url: string | null;
   output_master_url: string | null;

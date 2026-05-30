@@ -1,17 +1,20 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppTopBar } from "@/components/layout/AppTopBar";
 import { PlusIcon } from "@/components/icons";
-import { listProjects } from "@/api/projects";
+import { createProject, listProjects } from "@/api/projects";
 import { ProjectCard } from "./ProjectCard";
 import { NewProjectCard } from "./NewProjectCard";
 import { DashboardToolbar, type StatusFilter } from "./DashboardToolbar";
+import { NameProjectDialog } from "./NameProjectDialog";
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [q, setQ] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["projects", { status: filter, q }],
@@ -34,8 +37,24 @@ export function DashboardPage() {
     [allCounts.data],
   );
 
+  // v0.7：「新建」走真实 POST /projects，拿到 id 再跳编辑器
+  // 弹窗收集名字后提交，提交期间 create.isPending 让弹窗按钮 disabled
+  const create = useMutation({
+    mutationFn: (name: string) => createProject({ name }),
+    onSuccess: (p) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      setDialogOpen(false);
+      navigate(`/projects/${p.id}/edit`);
+    },
+    onError: (e) => {
+      console.error("新建项目失败", e);
+      alert(`新建失败：${(e as Error).message}`);
+    },
+  });
+
   const onCreate = () => {
-    navigate(`/projects/new/edit`);
+    if (create.isPending) return;
+    setDialogOpen(true);
   };
 
   return (
@@ -80,6 +99,13 @@ export function DashboardPage() {
         </div>
       </div>
       <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }`}</style>
+
+      <NameProjectDialog
+        open={dialogOpen}
+        pending={create.isPending}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={(name) => create.mutate(name)}
+      />
     </>
   );
 }

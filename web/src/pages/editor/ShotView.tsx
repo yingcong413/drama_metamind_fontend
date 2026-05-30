@@ -79,6 +79,21 @@ export function ShotView({
 
       <div className="field-stack">
         <SubCard
+          anchor={`s-${shot.id}-description`}
+          num="0" title="分镜描述"
+          tags={["opt"]}
+          help="用一句话描述这一镜整体在讲什么 / 画面是什么，会拼进本镜 prompt 的开头。例如「雨夜街头，女主撑伞快步走过，回头望了一眼身后」。"
+        >
+          <textarea
+            className="input"
+            style={{ width: "100%", minHeight: 72, resize: "vertical", lineHeight: 1.6, padding: "10px 12px" }}
+            placeholder="描述本分镜的画面与内容…"
+            value={shot.description ?? ""}
+            onChange={(e) => setShot({ ...shot, description: e.target.value })}
+          />
+        </SubCard>
+
+        <SubCard
           anchor={`s-${shot.id}-cast`}
           num="00" title="本分镜出场角色"
           tags={["req"]} required

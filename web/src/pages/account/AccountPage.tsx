@@ -3,13 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { AppTopBar } from "@/components/layout/AppTopBar";
 import { PlusIcon } from "@/components/icons";
 import { getAccount, listRecharges } from "@/api/account";
-import { listTasks } from "@/api/tasks";
+import { exportTasksCsv, getTaskStats, listTasks } from "@/api/tasks";
+import { useIsOwner, useAccountType } from "@/stores/auth";
 import { cn } from "@/lib/cn";
 import type { GenerationTask } from "@/types";
+import { AccountInfoCard } from "./AccountInfoCard";
 import { BalanceHero } from "./BalanceHero";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { TasksFilters, type TaskFilters } from "./TasksFilters";
 import { TasksTable } from "./TasksTable";
 import { TasksPagination } from "./TasksPagination";
+import { TasksStatsBar } from "./TasksStatsBar";
 import { RechargesTable } from "./RechargesTable";
 import { RechargeDialog } from "./RechargeDialog";
 import { VideoPreviewModal } from "./VideoPreviewModal";
@@ -23,14 +27,22 @@ const INITIAL_FILTERS: TaskFilters = {
   task_id: "",
   status: "all",
   resolution: "all",
+  scope: "mine",
+  cast_user_id: undefined,
 };
 
 export function AccountPage() {
   const [tab, setTab] = useState<Tab>("tasks");
   const [showRecharge, setShowRecharge] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
   const [previewTask, setPreviewTask] = useState<GenerationTask | null>(null);
   const [filters, setFilters] = useState<TaskFilters>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
+
+  // PRD v0.9 §1.5.3 + §10.6:企业 Owner 可切「全公司」tab,触发顶部汇总条
+  const isOwner = useIsOwner();
+  const accountType = useAccountType();
+  const canSeeOrgStats = isOwner && accountType === "enterprise" && filters.scope === "all";
 
   const accountQuery = useQuery({ queryKey: ["account"], queryFn: getAccount });
   const rechargesQuery = useQuery({ queryKey: ["recharges"], queryFn: listRecharges });
@@ -38,6 +50,8 @@ export function AccountPage() {
     queryKey: ["tasks", filters, page],
     queryFn: () =>
       listTasks({
+        scope: filters.scope,
+        cast_user_id: filters.cast_user_id,
         status: filters.status,
         resolution: filters.resolution,
         task_id: filters.task_id,
@@ -47,9 +61,32 @@ export function AccountPage() {
   });
   const allTasksQuery = useQuery({
     queryKey: ["tasks", "count-all"],
-    queryFn: () => listTasks({ page_size: 200 }),
+    queryFn: () => listTasks({ scope: filters.scope, page_size: 200 }),
     select: (r) => r.total,
   });
+  // 全公司汇总(仅 Owner + 全公司 tab 才拉)
+  const statsQuery = useQuery({
+    queryKey: ["task-stats", filters.date_from, filters.date_to],
+    queryFn: () =>
+      getTaskStats("all", { date_from: filters.date_from, date_to: filters.date_to }),
+    enabled: canSeeOrgStats,
+  });
+
+  const handleExport = async () => {
+    try {
+      await exportTasksCsv({
+        scope: filters.scope,
+        cast_user_id: filters.cast_user_id,
+        status: filters.status,
+        resolution: filters.resolution,
+        task_id: filters.task_id,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+      });
+    } catch (e) {
+      alert(`导出失败:${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
 
   const counts = useMemo(
     () => ({
@@ -70,6 +107,8 @@ export function AccountPage() {
         }
       />
       <div className="account" data-screen-label="Account">
+        <AccountInfoCard onChangePassword={() => setShowPwd(true)} />
+
         {accountQuery.data && (
           <BalanceHero
             account={accountQuery.data}
@@ -93,13 +132,28 @@ export function AccountPage() {
               </button>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-sm">导出 .csv</button>
-              <button className="btn btn-sm">列设置</button>
+              <button className="btn btn-sm" onClick={handleExport} disabled={tab !== "tasks"}>
+                导出 .csv
+              </button>
             </div>
           </div>
 
           {tab === "tasks" ? (
             <>
+              {canSeeOrgStats && statsQuery.data && (
+                <TasksStatsBar
+                  stats={statsQuery.data}
+                  onPickSubmitter={(userId) => {
+                    setFilters({ ...filters, cast_user_id: userId });
+                    setPage(1);
+                  }}
+                  currentSubmitter={filters.cast_user_id}
+                  onClearSubmitter={() => {
+                    setFilters({ ...filters, cast_user_id: undefined });
+                    setPage(1);
+                  }}
+                />
+              )}
               <TasksFilters
                 filters={filters}
                 setFilters={(f) => {
@@ -128,6 +182,7 @@ export function AccountPage() {
       {previewTask && (
         <VideoPreviewModal task={previewTask} onClose={() => setPreviewTask(null)} />
       )}
+      {showPwd && <ChangePasswordDialog onClose={() => setShowPwd(false)} />}
     </>
   );
 }

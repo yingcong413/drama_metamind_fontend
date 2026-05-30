@@ -829,6 +829,7 @@ input::placeholder, textarea::placeholder { color: var(--text-tertiary); }
 }
 .res-720p { background: oklch(40% .04 240 / .3); color: oklch(78% .06 240); }
 .res-1080p { background: oklch(50% .14 70 / .25); color: oklch(82% .14 70); }
+.res-4k { background: oklch(50% .16 320 / .25); color: oklch(82% .16 320); }
 
 .cost-amount {
   font-size: 12.5px;

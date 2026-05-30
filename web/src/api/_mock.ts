@@ -12,94 +12,189 @@ import type {
   TaskStatus,
   TaskTypeInfo,
 } from "@/types";
+import { loadJSON, saveJSON } from "./_mockStorage";
 
-const PROJECTS: ProjectListItem[] = [
-  { id: "p1", name: "雨夜的告别",   cover_url: null, hue: 220, status: "draft", shot_count: 12, duration_seconds: 204, updated_at: "2026-05-17T08:00:00Z" },
-  { id: "p2", name: "便利店的清晨", cover_url: null, hue: 60,  status: "done",  shot_count: 8,  duration_seconds: 130, updated_at: "2026-05-16T10:00:00Z" },
-  { id: "p3", name: "她不再回头",   cover_url: null, hue: 320, status: "done",  shot_count: 18, duration_seconds: 342, updated_at: "2026-05-14T09:00:00Z" },
-  { id: "p4", name: "考研最后一夜", cover_url: null, hue: 280, status: "gen",   shot_count: 6,  duration_seconds: 108, updated_at: "2026-05-10T22:00:00Z" },
-  { id: "p5", name: "夏天结束之前", cover_url: null, hue: 150, status: "draft", shot_count: 14, duration_seconds: 248, updated_at: "2026-05-03T15:00:00Z" },
-  { id: "p6", name: "深夜的电梯",   cover_url: null, hue: 12,  status: "done",  shot_count: 9,  duration_seconds: 156, updated_at: "2026-04-20T19:30:00Z" },
-];
+// v0.9.5: 新用户(无 localStorage 记录)看到空状态;demo 项目从默认数据中移除。
+// 老用户的真实项目数据在 localStorage 里继续读到,不影响。
+const DEFAULT_PROJECTS: ProjectListItem[] = [];
 
-export const MOCK_CHARACTERS: Character[] = [
-  { id: "c1", name: "林夏",       role: "女主", desc: "25岁都市白领，独立坚韧，常穿米色风衣，齐耳短发", tags: ["女主", "都市"], ref_image_url: "ref-1", ref_images: [], voice_sample_url: null, hue: 340, has_ref: true,  created_at: "", updated_at: "" },
-  { id: "c2", name: "陈砚",       role: "男主", desc: "28岁建筑师，沉稳寡言，金丝眼镜短发，常着深灰大衣",   tags: ["男主", "都市"], ref_image_url: "ref-2", ref_images: [], voice_sample_url: null, hue: 220, has_ref: true,  created_at: "", updated_at: "" },
-  { id: "c3", name: "苏老师",     role: "配角", desc: "中年女性教师，温和有力量，齐肩卷发，常着米白针织开衫", tags: ["配角", "成熟"], ref_image_url: "ref-3", ref_images: [], voice_sample_url: null, hue: 150, has_ref: true,  created_at: "", updated_at: "" },
-  { id: "c4", name: "小宁",       role: "少年", desc: "12岁少女，扎双马尾，校服，活泼但敏感",                tags: ["少年", "校园"], ref_image_url: null,    ref_images: [], voice_sample_url: null, hue: 50,  has_ref: false, created_at: "", updated_at: "" },
-  { id: "c5", name: "老李",       role: "配角", desc: "便利店老板，60岁左右，圆脸笑眯眯，蓝色围裙",          tags: ["配角"],         ref_image_url: "ref-5", ref_images: [], voice_sample_url: null, hue: 30,  has_ref: true,  created_at: "", updated_at: "" },
-  { id: "c6", name: "外卖员阿强", role: "路人", desc: "30岁外卖员，戴着帽子和口罩，蓝色制服",                tags: ["路人", "都市"], ref_image_url: null,    ref_images: [], voice_sample_url: null, hue: 200, has_ref: false, created_at: "", updated_at: "" },
-];
+// v0.7：项目列表与详情都持久化到 localStorage
+const PROJECTS: ProjectListItem[] = loadJSON<ProjectListItem[]>("projects", DEFAULT_PROJECTS);
 
-const PROJECT_DETAILS: Record<string, Project> = {
+function persistProjects() {
+  saveJSON("projects", PROJECTS);
+}
+
+// v0.5 mock 默认值：org_id / ark_project_name / 空 asset_bundle
+const MOCK_ORG = "org_mock";
+// v0.7: ark_project_name per-org，命名 `metamind-{org_id前 8}`
+const MOCK_ARK_PROJECT = `metamind-${MOCK_ORG.slice(0, 8)}`;
+const EMPTY_BUNDLE: Character["asset_bundle"] = {
+  counts: { image: 0, video: 0, audio: 0 },
+  primary_image_url: null,
+  primary_video_url: null,
+  primary_audio_url: null,
+  primary_image_ark_asset_id: null,
+  primary_video_ark_asset_id: null,
+  primary_audio_ark_asset_id: null,
+  processing_count: 0,
+  failed_count: 0,
+};
+
+// v0.9.5: 新用户角色库默认为空。老用户已存在的角色保留在 localStorage 不动。
+// 原 6 个 demo 角色(林夏/陈砚/苏老师/小宁/老李/外卖员阿强)已挪到 __fixtures__ 仅供测试使用。
+const DEFAULT_CHARACTERS: Character[] = [];
+// MOCK_ARK_PROJECT 与 EMPTY_BUNDLE 在 mockCreateCharacter 创建新角色时仍要用
+void MOCK_ARK_PROJECT;
+void EMPTY_BUNDLE;
+
+// 持久化到 localStorage：刷新页面后状态不丢
+export const MOCK_CHARACTERS: Character[] = loadJSON<Character[]>("characters", DEFAULT_CHARACTERS);
+
+function persistCharacters() {
+  saveJSON("characters", MOCK_CHARACTERS);
+}
+
+/**
+ * 真实素材上传(assets.ts → provider.createAssetGroup)首次为某角色创建素材组后,
+ * 回写 ark_group_id + asset_provider 到角色记录,后续上传跳过 group 创建。
+ * 找不到角色或 group_id 已存在且为真实 ID 时不动。
+ *
+ * v0.9.4 §2.8: 同时记录 asset_provider,切换上游后 ensureRealAssetGroup 会比对此字段。
+ */
+export function mockSetCharacterArkGroup(
+  character_id: string,
+  ark_group_id: string,
+  asset_provider: Character["asset_provider"],
+): void {
+  const idx = MOCK_CHARACTERS.findIndex((c) => c.id === character_id);
+  if (idx === -1) return;
+  MOCK_CHARACTERS[idx] = {
+    ...MOCK_CHARACTERS[idx],
+    ark_group_id,
+    asset_provider,
+    updated_at: new Date().toISOString(),
+  };
+  persistCharacters();
+}
+
+/** assets.ts 上传前需要拿角色当前的 ark_group_id 来决定是否懒建素材组 */
+export function mockGetCharacter(character_id: string): Character | null {
+  return MOCK_CHARACTERS.find((c) => c.id === character_id) ?? null;
+}
+
+// v0.9.5: 新用户项目详情也清空。原 p1「果茶广告 · Demo」demo 数据下方完整保留为
+// 内联注释,日后做「demo 项目一键导入」按钮时可以直接复用此模板。
+const DEFAULT_PROJECT_DETAILS: Record<string, Project> = {};
+const _DEMO_PROJECT_TEMPLATE_UNUSED: Record<string, Project> = {
   p1: {
-    id: "p1", name: "雨夜的告别", cover_url: null, hue: 220, status: "draft",
-    shot_count: 3, duration_seconds: 204,
-    created_at: "2026-05-15T08:00:00Z", updated_at: "2026-05-17T08:00:00Z",
+    id: "p1", name: "果茶广告 · Demo", cover_url: null, hue: 28, status: "draft",
+    shot_count: 3, duration_seconds: 11,
+    created_at: "2026-05-15T08:00:00Z", updated_at: "2026-05-24T08:00:00Z",
     global: {
-      total_duration_seconds: 15,
-      scene_images: ["咖啡厅 · 室内", "街道 · 雨夜"],
-      scene_selected: 1,
-      position_image_url: "站位草图 v2",
+      total_duration_seconds: 11,
+      ratio: "16:9",
+      resolution: "720p",
+      // Volcano 官方公开 demo 资源(来自 seedance2_final.py),URL 真实可访问,
+      // 测试者无需自己上传素材即可端到端跑通生成
+      scene_image:
+        "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic2.jpg",
+      position_image_url:
+        "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg",
+      prop_image_url: null,
       style: ["真人实拍"],
-      characters: ["c1", "c2"],
-      story: "林夏与陈砚在咖啡厅相约，准备最后一次见面。她把戒指放到桌上，雨声盖过他们的沉默。最后林夏起身离开，没有回头。",
-      narration_audio_url: "narration-track.m4a",
+      characters: ["c1"],
+      story:
+        "第一视角果茶产品广告:从果园摘下新鲜苹果,投入雪克杯加冰摇匀,倒入透明杯展示分层奶盖纹理,最后将成品举到镜头前。整体节奏轻快,突出「鲜切现摇」的产品卖点。",
+      image_quality: "4K 锐利、自然光、暖色调,产品微距分层清晰,轻微胶片颗粒",
+      narration_audio_url:
+        "https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3",
     },
     shots: [
       {
-        id: "s1", name: "推门入店", order: 0,
-        shot_size: "fs",
-        duration_seconds: 5,
-        cast_ids: ["c1"],
-        action: { start: "林夏在咖啡厅门外驻足", mid: "推开玻璃门走入店内", end: "环视一圈后径直走向靠窗的位置" },
-        action_strength: 65,
-        micro: { eyes: "微微眯起，扫视店内", look: "略显犹豫", emotion: "压抑、克制" },
-        micro_strength: 70,
-        gesture: "右手收拢风衣领口，左手攥紧手机",
-        gesture_strength: 60,
-        camera: [{ id: "push_in", speed: "慢", magnitude: "中", direction: null }],
-        lines: { char_id: "c1", text: "", audio_url: null },
-        mono:  { char_id: "c1", text: "已经三个月没来这家店了。", audio_url: null },
-        narration: { char_id: null, text: "", audio_url: null },
-        sfx: "玻璃门铃铛声、雨声闷过门",
-      },
-      {
-        id: "s2", name: "落座与对视", order: 1,
-        shot_size: "ms",
-        duration_seconds: null,
-        cast_ids: ["c1", "c2"],
-        action: { start: "林夏在陈砚对面坐下", mid: "脱下风衣搭在椅背", end: "抬头与陈砚短暂对视后看向窗外" },
-        action_strength: 65,
-        micro: { eyes: "回避对视", look: "克制紧张", emotion: "刺痛但平静" },
-        micro_strength: 65,
-        gesture: "用手指无意识地摩挲杯沿",
-        gesture_strength: 65,
-        camera: [{ id: "pan_l", speed: "中", magnitude: "中", direction: null }],
-        lines: { char_id: "c2", text: "你来了。", audio_url: null },
-        mono: null, narration: null,
-        sfx: "",
-      },
-      {
-        id: "s3", name: "递出戒指", order: 2,
+        id: "s1", name: "取材 · 摘苹果", description: "", order: 0,
         shot_size: "mcu",
-        duration_seconds: 5,
-        cast_ids: ["c1", "c2"],
-        action: { start: "林夏从口袋取出戒指盒", mid: "缓缓推到桌子中央", end: "双手收回放在膝上" },
+        duration_seconds: null,
+        cast_ids: ["c1"],
+        action: {
+          start: "第一人称视角看向果园里挂满露珠的红苹果",
+          mid: "手伸出画面轻握住一颗带晨露的阿克苏苹果",
+          end: "缓缓摘下,苹果离开枝头时的轻微晃动",
+        },
+        action_strength: 60,
+        micro: { eyes: "", look: "", emotion: "" },
+        micro_strength: 60,
+        gesture: "拇指与食指顺势托住苹果底部",
+        gesture_strength: 55,
+        camera: [{ id: "push_in", speed: "慢", magnitude: "小", direction: null }],
+        lines: null,
+        mono: null,
+        narration: { char_id: null, text: "", audio_url: null },
+        sfx: "苹果离枝的清脆声、远处鸟鸣",
+      },
+      {
+        id: "s2", name: "调制 · 雪克杯", description: "", order: 1,
+        shot_size: "cu",
+        duration_seconds: null,
+        cast_ids: ["c1"],
+        action: {
+          start: "第一人称视角看向工作台,雪克杯放在台面中央",
+          mid: "手将苹果块投入杯中,加冰块、倒入茶底",
+          end: "双手握住雪克杯上下用力摇晃几下",
+        },
         action_strength: 70,
-        micro: { eyes: "盯着戒指盒", look: "决绝", emotion: "释然" },
-        micro_strength: 65,
-        gesture: "推盒子时手指微微颤抖",
-        gesture_strength: 70,
-        camera: [{ id: "boom_d", speed: "慢", magnitude: "小", direction: null }],
-        lines: { char_id: "c1", text: "还给你。", audio_url: null },
-        mono: null, narration: null,
-        sfx: "戒指盒触桌的轻响",
+        micro: { eyes: "", look: "", emotion: "" },
+        micro_strength: 60,
+        gesture: "摇晃节奏稳定、与背景鼓点同步",
+        gesture_strength: 65,
+        camera: [{ id: "handheld", speed: "中", magnitude: "小", direction: null }],
+        lines: null,
+        mono: null,
+        narration: { char_id: null, text: "", audio_url: null },
+        sfx: "冰块碰撞声、雪克杯金属轻响",
+      },
+      {
+        id: "s3", name: "呈现 · 举杯", description: "", order: 2,
+        shot_size: "mcu",
+        duration_seconds: null,
+        cast_ids: ["c1"],
+        action: {
+          start: "果茶倒入透明杯,呈现分层质感、奶盖在顶层铺展",
+          mid: "手将成品杯从台面拿起",
+          end: "第一人称将杯子举到镜头正前方,杯身标签朝向观众",
+        },
+        action_strength: 65,
+        micro: { eyes: "", look: "", emotion: "" },
+        micro_strength: 60,
+        gesture: "手指稳定握住杯身中段,避免遮挡标签",
+        gesture_strength: 60,
+        camera: [{ id: "pull_out", speed: "慢", magnitude: "中", direction: null }],
+        lines: null,
+        mono: null,
+        narration: { char_id: null, text: "", audio_url: null },
+        sfx: "玻璃杯轻碰桌面、轻快收尾鼓点",
       },
     ],
-    output: { ambient_sfx: "咖啡厅低噪声、远处雨声、隐约爵士乐", subtitle: true, music: true },
+    output: {
+      ambient_sfx: "果园清晨鸟鸣、轻快电子鼓点、店内环境底噪",
+      subtitle: false,
+      music: true,
+      generate_audio: true,
+    },
   },
 };
+
+// 持久化项目详情(含新建出来的)
+const PROJECT_DETAILS: Record<string, Project> = loadJSON<Record<string, Project>>(
+  "project_details",
+  DEFAULT_PROJECT_DETAILS,
+);
+// 抑制 noUnusedLocals;日后导入 demo 时会用上这份模板
+void _DEMO_PROJECT_TEMPLATE_UNUSED;
+
+function persistProjectDetails() {
+  saveJSON("project_details", PROJECT_DETAILS);
+}
 
 const blankProject = (id: string): Project => ({
   id,
@@ -113,14 +208,18 @@ const blankProject = (id: string): Project => ({
   updated_at: new Date().toISOString(),
   global: {
     total_duration_seconds: null,
-    scene_images: [], scene_selected: null,
+    ratio: "16:9",
+    resolution: "720p",
+    scene_image: null,
     position_image_url: null,
+    prop_image_url: null,
     style: [], characters: [], story: "",
+    image_quality: "",
     narration_audio_url: null,
   },
   shots: [
     {
-      id: "s_init", name: "新分镜", order: 0,
+      id: "s_init", name: "新分镜", description: "", order: 0,
       shot_size: null,
       duration_seconds: null,
       cast_ids: [],
@@ -134,7 +233,7 @@ const blankProject = (id: string): Project => ({
       sfx: "",
     },
   ],
-  output: { ambient_sfx: "", subtitle: false, music: false },
+  output: { ambient_sfx: "", subtitle: false, music: false, generate_audio: true },
 });
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -166,12 +265,118 @@ export async function mockGetProject(id: string): Promise<Project> {
   return PROJECT_DETAILS[id] ?? blankProject(id);
 }
 
-export async function mockListCharacters(): Promise<Character[]> {
-  await delay(120);
-  return MOCK_CHARACTERS.slice();
+export interface CreateProjectInput {
+  name?: string;
+  template_id?: string | null;
 }
 
-export type CharacterUpsert = Omit<Character, "id" | "has_ref" | "created_at" | "updated_at">;
+export async function mockCreateProject(input: CreateProjectInput = {}): Promise<Project> {
+  await delay(180);
+  const id = "p_" + Date.now().toString(36);
+  const name = (input.name?.trim() || "未命名项目");
+  // 用名字 hash 出 hue，跟后端 §3.4 「按 name hash 生成 hue」对齐
+  const hue = simpleHueFromName(name);
+  const project: Project = {
+    ...blankProject(id),
+    name,
+    hue,
+  };
+  PROJECT_DETAILS[id] = project;
+  // 同步更新列表
+  const item: ProjectListItem = {
+    id, name, cover_url: null, hue,
+    status: project.status,
+    shot_count: project.shots.length,
+    duration_seconds: project.duration_seconds,
+    updated_at: project.updated_at,
+  };
+  PROJECTS.unshift(item); // 新建的放最前
+  persistProjects();
+  persistProjectDetails();
+  return project;
+}
+
+/**
+ * 把整个 project 写回 mock store。
+ *   - PROJECT_DETAILS[id] = project(完整数据,编辑器里所有字段)
+ *   - PROJECTS 同步更新元信息(name / shot_count / duration_seconds / updated_at)以便 Dashboard 看到
+ *   - localStorage 持久化,刷新还在
+ */
+export async function mockUpdateProject(id: string, project: Project): Promise<Project> {
+  await delay(160);
+  const now = new Date().toISOString();
+  const next: Project = {
+    ...project,
+    id, // 防止 id 被覆盖
+    shot_count: project.shots.length,
+    duration_seconds: project.global.total_duration_seconds ?? project.duration_seconds ?? 0,
+    updated_at: now,
+  };
+  PROJECT_DETAILS[id] = next;
+  persistProjectDetails();
+
+  // 列表里的元信息也要更
+  const idx = PROJECTS.findIndex((p) => p.id === id);
+  const item: ProjectListItem = {
+    id,
+    name: next.name,
+    cover_url: next.cover_url,
+    hue: next.hue,
+    status: next.status,
+    shot_count: next.shot_count,
+    duration_seconds: next.duration_seconds,
+    updated_at: now,
+  };
+  if (idx >= 0) PROJECTS[idx] = item;
+  else PROJECTS.unshift(item);
+  persistProjects();
+
+  return next;
+}
+
+export async function mockDeleteProject(id: string): Promise<void> {
+  await delay(140);
+  const idx = PROJECTS.findIndex((p) => p.id === id);
+  if (idx !== -1) {
+    PROJECTS.splice(idx, 1);
+    delete PROJECT_DETAILS[id];
+    persistProjects();
+    persistProjectDetails();
+  }
+}
+
+function simpleHueFromName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return Math.abs(hash) % 360;
+}
+
+export async function mockListCharacters(): Promise<Character[]> {
+  await delay(120);
+  // 动态注入 asset_bundle：从 api/assets 的 mockStore 实时算
+  // （延迟 import 避免循环依赖）
+  const { computeMockAssetBundle } = await import("./assets");
+  return MOCK_CHARACTERS.map((c) => ({
+    ...c,
+    asset_bundle: computeMockAssetBundle(c.id),
+  }));
+}
+
+// v0.5：org_id / ark_* / asset_bundle 由后端在 POST /characters 内部填充（CreateAssetGroup）
+// 前端表单只提交基础字段，下列字段从 CharacterUpsert 中剔除
+// v0.9.4: asset_provider 跟 ark_group_id 一样,由 ensureRealAssetGroup 在首次上传时回填,不让表单管
+export type CharacterUpsert = Omit<
+  Character,
+  | "id"
+  | "has_ref"
+  | "created_at"
+  | "updated_at"
+  | "org_id"
+  | "asset_provider"
+  | "ark_group_id"
+  | "ark_project_name"
+  | "asset_bundle"
+>;
 
 export async function mockCreateCharacter(input: CharacterUpsert): Promise<Character> {
   await delay(180);
@@ -180,11 +385,17 @@ export async function mockCreateCharacter(input: CharacterUpsert): Promise<Chara
   const c: Character = {
     ...input,
     id,
+    org_id: MOCK_ORG,
+    asset_provider: null,
+    ark_group_id: `group-mock-${id}`,
+    ark_project_name: MOCK_ARK_PROJECT,
+    asset_bundle: EMPTY_BUNDLE,
     has_ref: !!input.ref_image_url,
     created_at: now,
     updated_at: now,
   };
   MOCK_CHARACTERS.push(c);
+  persistCharacters();
   return c;
 }
 
@@ -199,13 +410,17 @@ export async function mockUpdateCharacter(id: string, patch: Partial<CharacterUp
     updated_at: new Date().toISOString(),
   };
   MOCK_CHARACTERS[idx] = merged;
+  persistCharacters();
   return merged;
 }
 
 export async function mockDeleteCharacter(id: string): Promise<void> {
   await delay(140);
   const idx = MOCK_CHARACTERS.findIndex((c) => c.id === id);
-  if (idx !== -1) MOCK_CHARACTERS.splice(idx, 1);
+  if (idx !== -1) {
+    MOCK_CHARACTERS.splice(idx, 1);
+    persistCharacters();
+  }
 }
 
 // === Auth ===============================================================
@@ -214,17 +429,84 @@ export async function mockSendSms(): Promise<{ expires_in: number; next_send_in:
   return { expires_in: 60, next_send_in: 60 };
 }
 
+// demo 自动登录走的固定号码,给它个友好昵称
+const DEMO_PHONE = "13800138000";
+
+// ────────── 多账户(PRD v0.9 §1.5)mock 存储 ──────────
+//
+// mock 模式下用 localStorage 维护一个「用户档案」+ 一个「组织档案」,持久化
+// 在浏览器刷新 / 多次登录之间保持一致。
+//
+//   metamind-mock-v1-user_profile   存登录者档案:role/org_id/preferred_language/account_type/org_name
+//   metamind-mock-v1-mock_org_members  组织成员列表(Owner 在 OrgPage 邀请的)
+
+interface MockUserProfile {
+  id?: string;
+  name?: string;
+  phone?: string;
+  role?: "owner" | "member";
+  account_type?: "personal" | "enterprise";
+  org_id?: string;
+  org_name?: string;
+  preferred_language?: "zh-CN" | "en" | "fr";
+  joined_at?: string;
+}
+
+function loadMockProfile(): MockUserProfile {
+  return loadJSON<MockUserProfile>("user_profile", {});
+}
+
+function saveMockProfile(patch: MockUserProfile): MockUserProfile {
+  const merged = { ...loadMockProfile(), ...patch };
+  saveJSON("user_profile", merged);
+  return merged;
+}
+
+function buildMockUser(input: { phone?: string; account?: string; isDemo?: boolean }): LoginResponse["user"] {
+  const stored = loadMockProfile();
+  const phone = stored.phone || input.phone || "13800138000";
+  const id = stored.id || "u_mock";
+  const orgId = stored.org_id || "org_mock";
+  const accountType = stored.account_type || "personal";
+  const role = stored.role || "owner";
+  const orgName =
+    stored.org_name || (accountType === "enterprise" ? "未命名公司" : (stored.name || "你") + " 的工作室");
+  // mock 模式下:Demo 账号 + 13800138000 直接给 platform_admin,方便看 /admin/recharge UI
+  const isPlatformAdmin = phone === "13800138000";
+  return {
+    id,
+    name: stored.name || (input.isDemo ? "Demo 用户" : input.account || "你"),
+    phone: phone.slice(0, 3) + "****" + phone.slice(7),
+    avatar_url: null,
+    email: null,
+    org_id: orgId,
+    role,
+    status: "active",
+    joined_at: stored.joined_at || new Date().toISOString(),
+    preferred_language: stored.preferred_language || "zh-CN",
+    is_platform_admin: isPlatformAdmin,
+    org: {
+      id: orgId,
+      name: orgName,
+      logo_url: null,
+      owner_user_id: role === "owner" ? id : "u_owner_mock",
+      seat_limit: accountType === "enterprise" ? 20 : 1,
+      account_type: accountType,
+      status: "active",
+      member_count: 1,
+      created_at: new Date().toISOString(),
+    },
+  };
+}
+
 export async function mockLoginPhone(phone: string): Promise<LoginResponse> {
   await delay(220);
+  // 第一次登录时,持久化用户 phone(注册路径会带 phone 进来)
+  if (phone && !loadMockProfile().phone) saveMockProfile({ phone });
   return {
     token: "mock-token-" + Date.now().toString(36),
     expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
-    user: {
-      id: "u_mock",
-      name: "你",
-      phone: phone.slice(0, 3) + "****" + phone.slice(7),
-      avatar_url: null,
-    },
+    user: buildMockUser({ phone, isDemo: phone === DEMO_PHONE }),
   };
 }
 
@@ -233,8 +515,43 @@ export async function mockLoginPassword(account: string): Promise<LoginResponse>
   return {
     token: "mock-token-" + Date.now().toString(36),
     expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
-    user: { id: "u_mock", name: account || "你", phone: "138****8000", avatar_url: null },
+    user: buildMockUser({ account }),
   };
+}
+
+/** 注册成功路径(mock):带 account_type + org_name 时,把它们落到 profile,再走 mockLoginPhone */
+export async function mockRegister(input: {
+  phone: string;
+  account_type?: "personal" | "enterprise";
+  org_name?: string;
+}): Promise<LoginResponse> {
+  saveMockProfile({
+    phone: input.phone,
+    account_type: input.account_type || "personal",
+    org_name: input.account_type === "enterprise" ? input.org_name : undefined,
+    role: "owner",
+    joined_at: new Date().toISOString(),
+  });
+  return mockLoginPhone(input.phone);
+}
+
+/** mock 修改昵称 / preferred_language(persist 到 localStorage,下次登录还原) */
+export async function mockUpdateUser(patch: { name?: string; preferred_language?: "zh-CN" | "en" | "fr" }): Promise<MockUserProfile> {
+  await delay(160);
+  return saveMockProfile(patch);
+}
+
+/** mock 修改密码:只做表单层面校验,不真比对老密码 */
+export async function mockChangePassword(params: {
+  old_password: string;
+  new_password: string;
+}): Promise<{ ok: true }> {
+  await delay(220);
+  if (!params.old_password) throw new Error("请输入旧密码");
+  if (!params.new_password || params.new_password.length < 6) {
+    throw new Error("新密码至少 6 位");
+  }
+  return { ok: true };
 }
 
 // === Account ============================================================

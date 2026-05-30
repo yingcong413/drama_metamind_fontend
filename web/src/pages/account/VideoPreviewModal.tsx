@@ -8,8 +8,7 @@ interface Props {
 }
 
 export function VideoPreviewModal({ task, onClose }: Props) {
-  const previewSeconds = Math.min(99, Math.round(task.duration_seconds * 0.1));
-  const shotCount = Math.min(8, Math.round(task.duration_seconds / 8));
+  const videoUrl = task.output_video_url;
 
   return (
     <>
@@ -33,53 +32,27 @@ export function VideoPreviewModal({ task, onClose }: Props) {
         </div>
 
         <div className="video-modal-body">
-          <div className="video-modal-stage">
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "grid",
-                placeItems: "center",
-                color: "rgba(255,255,255,.3)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: ".1em",
-              }}
-            >
-              VIDEO 1080×1920 · MP4 · 8.4 MB
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                top: 14,
-                left: 14,
-                padding: "4px 8px",
-                background: "rgba(0,0,0,.55)",
-                color: "white",
-                borderRadius: 4,
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-              }}
-            >
-              {Math.round(task.duration_seconds / 8)} 个分镜 ·{" "}
-              {(task.duration_seconds / 60).toFixed(1)}m
-            </div>
-            <div className="video-controls">
-              <div className="video-timeline">
-                <div className="played" style={{ width: "0%" }} />
+          <div className="video-modal-stage" style={{ background: "#000" }}>
+            {videoUrl ? (
+              <video
+                src={videoUrl}
+                controls
+                style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+              />
+            ) : (
+              <div
+                style={{
+                  position: "absolute", inset: 0,
+                  display: "grid", placeItems: "center", gap: 8,
+                  color: "rgba(255,255,255,.4)", fontSize: 12,
+                }}
+              >
+                <PlayIcon />
+                {task.status === "failed"
+                  ? `生成失败${task.fail_reason ? "：" + task.fail_reason : ""}`
+                  : "暂无可播放的视频"}
               </div>
-              <div className="row">
-                <div className="play">
-                  <PlayIcon />
-                </div>
-                <span>00:00 / 00:{String(previewSeconds).padStart(2, "0")}</span>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 12, opacity: 0.8 }}>
-                  <span>1×</span>
-                  <span>HD</span>
-                  <span>⛶</span>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           <div className="video-modal-side">
@@ -141,30 +114,6 @@ export function VideoPreviewModal({ task, onClose }: Props) {
               </div>
             </div>
 
-            <div className="vm-section">
-              <div
-                className="dim-2 mono"
-                style={{
-                  fontSize: 10, letterSpacing: ".08em",
-                  textTransform: "uppercase", marginBottom: 8,
-                }}
-              >
-                分镜缩略图
-              </div>
-              <div className="vm-shots">
-                {Array.from({ length: shotCount }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="vm-shot"
-                    style={{
-                      background: `linear-gradient(135deg, oklch(35% .10 ${(i * 50 + task.type.hue) % 360}), oklch(20% .08 ${(i * 50 + task.type.hue + 60) % 360}))`,
-                    }}
-                  >
-                    <span className="mono">{String(i + 1).padStart(2, "0")}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>

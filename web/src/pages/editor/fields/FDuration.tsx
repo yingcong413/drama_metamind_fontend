@@ -5,49 +5,63 @@ interface Props {
   set: (g: GlobalLayer) => void;
 }
 
-const PRESETS = [5, 10, 15];
+// 滑块允许的最小/最大秒数(用户视角)
+// v0.9.5: 不再向 Seedance 的 5/8/11 三档对齐 —— 用户拖到几秒就提交几秒。
+const MIN_SECONDS = 4;
+const MAX_SECONDS = 15;
+const DEFAULT_SECONDS = 5;
 
 export function FDuration({ value, set }: Props) {
-  const cur = value.total_duration_seconds;
-  const isPreset = cur != null && PRESETS.includes(cur);
+  const cur = value.total_duration_seconds ?? DEFAULT_SECONDS;
+  const clamped = Math.max(MIN_SECONDS, Math.min(MAX_SECONDS, cur));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div className="chips">
-        {PRESETS.map((s) => (
-          <button
-            key={s}
-            className={`chip ${cur === s ? "selected global" : ""}`}
-            onClick={() => set({ ...value, total_duration_seconds: s })}
-          >
-            {s} 秒
-          </button>
-        ))}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {/* 进度条 + 当前值 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span
-          className="dim-2"
-          style={{
-            fontSize: 11,
-            fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em",
-          }}
+          className="dim-2 mono"
+          style={{ fontSize: 12, minWidth: 22, textAlign: "right" }}
         >
-          自定义
+          {MIN_SECONDS}s
         </span>
         <input
-          className="input"
-          type="number"
-          min={1}
+          type="range"
+          min={MIN_SECONDS}
+          max={MAX_SECONDS}
           step={1}
-          style={{ width: 120, padding: "8px 12px", fontSize: 14 }}
-          placeholder="秒"
-          value={cur != null && !isPreset ? cur : ""}
+          value={clamped}
           onChange={(e) => {
             const n = parseInt(e.target.value, 10);
-            set({ ...value, total_duration_seconds: Number.isFinite(n) && n > 0 ? n : null });
+            set({
+              ...value,
+              total_duration_seconds: Number.isFinite(n) ? n : null,
+            });
+          }}
+          style={{
+            flex: 1,
+            accentColor: "var(--accent)",
+            cursor: "pointer",
           }}
         />
-        <span className="dim-2" style={{ fontSize: 12 }}>秒</span>
+        <span className="dim-2 mono" style={{ fontSize: 12, minWidth: 28 }}>
+          {MAX_SECONDS}s
+        </span>
+        <span
+          className="mono"
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            color: "var(--accent)",
+            minWidth: 56,
+            textAlign: "right",
+          }}
+        >
+          {clamped} 秒
+        </span>
+      </div>
+      <div className="dim-2" style={{ fontSize: 12, lineHeight: 1.5 }}>
+        全片时长 {clamped} 秒,该数值会直接写入提示词与 Seedance 请求。
       </div>
     </div>
   );

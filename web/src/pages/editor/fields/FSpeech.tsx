@@ -1,5 +1,7 @@
+import { useRef, useState } from "react";
 import { CloseIcon, MicIcon, PlayIcon } from "@/components/icons";
 import { Tag } from "@/components/primitives/Tag";
+import { uploadGlobalAudio } from "@/lib/uploadGlobalImage";
 import type { Character, Shot, SpeechBlock } from "@/types";
 
 export type SpeechKind = "lines" | "mono" | "narration";
@@ -34,6 +36,30 @@ export function FSpeech({
   const options = ids
     .map((id) => characters.find((c) => c.id === id))
     .filter((c): c is Character => !!c);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState(false);
+  const pickFile = () => inputRef.current?.click();
+  const onChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    // v0.9.3:浏览器侧 SigV4 直传 TOS,拿公网 URL
+    // 之前只存 file.name 或 blob URL,Seedance 拿到没法用
+    setPending(true);
+    try {
+      const prefix = kind === "lines" ? "speech_lines"
+        : kind === "mono" ? "speech_mono"
+        : "speech_narration";
+      const { url } = await uploadGlobalAudio(f, { prefix });
+      update({ audio_url: url });
+    } catch (err) {
+      console.error("上传台词/独白/旁白音频失败", err);
+      alert("上传音频失败:" + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -99,6 +125,13 @@ export function FSpeech({
         >
           音频
         </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="audio/*"
+          style={{ display: "none" }}
+          onChange={onChange}
+        />
         {v.audio_url ? (
           <div
             style={{
@@ -118,8 +151,14 @@ export function FSpeech({
             </div>
             <div style={{ flex: 1, fontSize: 12, fontFamily: "var(--font-mono)" }}>{v.audio_url}</div>
             <span className="dim-2 mono" style={{ fontSize: 10 }}>00:03</span>
-            <button className="btn-ghost btn-sm">替换</button>
-            <button className="btn-ghost btn-sm" onClick={() => update({ audio_url: null })}>
+            <button className="btn-ghost btn-sm" onClick={pickFile} disabled={pending}>
+              {pending ? "上传中…" : "替换"}
+            </button>
+            <button
+              className="btn-ghost btn-sm"
+              onClick={() => update({ audio_url: null })}
+              disabled={pending}
+            >
               <CloseIcon />
             </button>
           </div>
@@ -127,8 +166,12 @@ export function FSpeech({
           <button
             className="btn btn-sm"
             style={{ flex: 1, justifyContent: "flex-start", padding: "8px 12px" }}
+            onClick={pickFile}
+            disabled={pending}
           >
-            <MicIcon /> 上传或录制音频 <Tag kind="audio">需音频</Tag>
+            <MicIcon />{" "}
+            {pending ? "正在上传到 TOS…" : "上传或录制音频"}{" "}
+            <Tag kind="audio">需音频</Tag>
           </button>
         )}
       </div>
