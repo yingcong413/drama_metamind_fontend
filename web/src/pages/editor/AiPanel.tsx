@@ -1,16 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useT, useTf } from "@/lib/i18n";
 
-type FlowKind = "image" | "text" | "voice";
+type FlowKind = "image" | "text";
 type ModelKind = FlowKind;
-type FlowId =
-  | "character"
-  | "scene"
-  | "prop"
-  | "story"
-  | "voiceCast"
-  | "voiceAmb"
-  | "voiceBgm";
+type FlowId = "character" | "scene" | "prop" | "story";
 type Ans = Record<string, string | null>;
 
 interface Step {
@@ -27,12 +20,6 @@ interface FlowDef {
 const MODEL_OPTIONS: Record<ModelKind, string[]> = {
   image: ["GPT-Image-2", "Gemini 1.5 Flash Image Preview", "Gemini 1.5 Pro Image Preview"],
   text: ["GPT-5.5", "Claude Opus-4.8"],
-  voice: [
-    "GPT-Voice-1（OpenAI）",
-    "GPT-4o Audio TTS（OpenAI）",
-    "Gemini 1.5 Flash TTS（Google）",
-    "Google Cloud TTS · Neural2（Google）",
-  ],
 };
 
 const FLOWS: Record<FlowId, FlowDef> = {
@@ -77,38 +64,6 @@ const FLOWS: Record<FlowId, FlowDef> = {
       { key: "length", q: "想要多长？", opts: ["6 秒", "8 秒", "单集 15 秒", "多分镜连续剧"] },
     ],
   },
-  voiceCast: {
-    kind: "voice",
-    label: "角色配音",
-    steps: [
-      { key: "tone", q: "想要什么音色？", opts: ["男声", "女声", "童声", "旁白音", "老年音"] },
-      { key: "emotion", q: "配音的情绪是？", opts: ["平静", "紧张", "悲伤", "愤怒", "俏皮"] },
-      { key: "speed", q: "语速快慢？", opts: ["慢", "适中", "快"] },
-    ],
-  },
-  voiceAmb: {
-    kind: "voice",
-    label: "环境音效",
-    steps: [
-      { key: "sfx", q: "想要什么环境音效？", opts: ["风声", "雨声", "虫鸣", "脚步声", "打斗声", "市集喧闹"] },
-      { key: "intensity", q: "音效强度？", opts: ["轻微", "适中", "强烈"] },
-    ],
-  },
-  voiceBgm: {
-    kind: "voice",
-    label: "背景音乐",
-    steps: [
-      { key: "style", q: "想要什么风格的背景音乐？", opts: ["古风", "紧张", "温馨", "悬疑", "热血", "悲情"] },
-      { key: "emotion", q: "情绪走向？", opts: ["渐强", "平稳", "起伏"] },
-      { key: "tempo", q: "节奏快慢？", opts: ["慢", "中速", "快"] },
-    ],
-  },
-};
-
-const VOICE_META: Record<string, { target: string; dur: string }> = {
-  voiceCast: { target: "旁白音频", dur: "0:06" },
-  voiceAmb: { target: "环境音效", dur: "0:08" },
-  voiceBgm: { target: "背景音乐", dur: "0:30" },
 };
 
 const ADOPT_MSG: Record<FlowId, string> = {
@@ -116,14 +71,10 @@ const ADOPT_MSG: Record<FlowId, string> = {
   scene: "✓ 已挂到「字段 04 · 场景」，左侧该字段已标记完成。",
   prop: "✓ 已挂到「字段 06 · 道具」。",
   story: "✓ 已写入「字段 09 · 故事内容」。",
-  voiceCast: "✓ 已挂到「字段 15 · 旁白音频」。",
-  voiceAmb: "✓ 已挂到「字段 11 · 环境音效」。",
-  voiceBgm: "✓ 已挂到「字段 14 · 背景音乐」，已开启背景音乐开关。",
 };
 
 const GEN_STATUS: Record<FlowKind, string[]> = {
   image: ["正在理解设定…", "构图与打光…", "渲染画面细节…"],
-  voice: ["正在解析音色…", "合成语音波形…", "渲染并降噪…"],
   text: ["正在构思设定…", "编排分镜节拍…", "润色台词…"],
 };
 
@@ -185,15 +136,6 @@ const hueOf = (s: string) => {
 const summaryOf = (def: FlowDef, ans: Ans) =>
   def.steps.map((s) => ans[s.key] || "AI 匹配").join(" · ");
 
-function waveHeights(n: number): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const h = 30 + Math.round(Math.abs(Math.sin(i * 0.8)) * 55 + ((i * 13) % 20));
-    out.push(Math.max(14, Math.min(96, h)));
-  }
-  return out;
-}
-
 const I = {
   spark: (
     <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
@@ -230,50 +172,12 @@ const I = {
       <path d="M9.5 4 6 8l3.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
-  mic: (
-    <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-      <rect x="6" y="2" width="4" height="7" rx="2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M4 7v1a4 4 0 008 0V7M8 12v2M5.5 14h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  ),
-  sfx: (
-    <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-      <path d="M8 4 5 6H3v4h2l3 2V4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M11 6.3a2.6 2.6 0 010 3.4M13 5a5 5 0 010 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  ),
-  music: (
-    <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-      <path d="M6 12V4l7-1.5V10" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <circle cx="4.3" cy="12" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="11.3" cy="10" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  ),
-  play: (
-    <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-      <path d="M5 3.5v9l7-4.5-7-4.5z" fill="currentColor" />
-    </svg>
-  ),
   send: (
     <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
       <path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
 };
-
-function AudioCard({ dur }: { dur: string }) {
-  return (
-    <div className="ai-audio">
-      <button className="ai-audio-play">{I.play}</button>
-      <div className="ai-wave">
-        {waveHeights(30).map((h, i) => (
-          <i key={i} style={{ height: h + "%" }} />
-        ))}
-      </div>
-      <span className="ai-audio-time mono">{dur}</span>
-    </div>
-  );
-}
 
 function Beats({ beats }: { beats: Beat[] }) {
   return (
@@ -288,20 +192,96 @@ function Beats({ beats }: { beats: Beat[] }) {
   );
 }
 
-function FreeTextResult({ v }: { v: string }) {
+type TextReplyKind = "greeting" | "help" | "thanks" | "idea";
+
+function classifyText(raw: string): TextReplyKind {
+  const v = raw.trim().toLowerCase();
+  if (
+    v.length <= 1 ||
+    /^(h(i|ello|ey)+|yo|你好|您好|哈喽|哈啰|嗨|嘿|在吗|在不在|在么|在不|早(上好)?|(上午|中午|下午|晚上)好|good\s*(morning|evening|afternoon|night))[!！.。~\s]*$/i.test(v)
+  )
+    return "greeting";
+  if (/(谢谢|多谢|感谢|辛苦了|thanks|thank\s*you|thx)/i.test(v)) return "thanks";
+  if (/(能做什么|会什么|怎么用|如何使用|使用说明|帮助|help|你是谁|有什么功能|功能介绍|怎么开始|不会用)/i.test(v))
+    return "help";
+  return "idea";
+}
+
+function IdeaBeats({ v }: { v: string }) {
+  const t = useT();
+  const tf = useTf();
+  return (
+    <Beats
+      beats={[
+        { n: "01", text: tf("开场：用一个抓人的画面带出「{v}」的核心情境。", { v }) },
+        { n: "02", text: t("转折：冲突或反差骤然出现，节奏提速，信息量拉满。") },
+        { n: "03", text: t("收束：情绪落点后留一个钩子，引向下一集。") },
+      ]}
+    />
+  );
+}
+
+function StreamBubble({
+  msg,
+  onAdopt,
+}: {
+  msg: Extract<Msg, { kind: "stream" }>;
+  onAdopt: (node: ReactNode) => void;
+}) {
   const t = useT();
   return (
     <>
-      <strong>{t("已为你拓展该构思")}</strong>
+      <span style={{ whiteSpace: "pre-wrap" }}>{msg.full.slice(0, msg.shown)}</span>
+      {!msg.done && <span className="ai-caret" />}
+      {msg.done && msg.idea != null && (
+        <>
+          <IdeaBeats v={msg.idea} />
+          <div className="ai-gen-actions">
+            <button className="btn btn-sm" onClick={() => onAdopt(<>{t("✓ 已写入「字段 09 · 故事内容」。")}</>)}>
+              {t("写入字段 09 故事内容")}
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function deriveScriptStats(text: string): { shots: number; chars: number } {
+  const lines = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+  const shots = Math.min(8, Math.max(3, lines.length || 4));
+  const chars = Math.max(2, Math.min(5, Math.ceil(shots / 2)));
+  return { shots, chars };
+}
+
+function ScriptImportResult({
+  shots,
+  chars,
+  onAdopt,
+}: {
+  shots: number;
+  chars: number;
+  onAdopt: (node: ReactNode) => void;
+}) {
+  const t = useT();
+  const tf = useTf();
+  return (
+    <>
+      <strong>{t("已解析剧本，识别到以下内容：")}</strong>
       <br />
-      <span className="dim">「{v}」</span>
-      <Beats
-        beats={[
-          { n: "01", text: "开场：建立人物与处境，一个抓人的动作。" },
-          { n: "02", text: "转折：冲突或反差出现，节奏提速。" },
-          { n: "03", text: "收束：留一个钩子，引向下一集。" },
-        ]}
-      />
+      <span className="dim">
+        {tf("约 {shots} 个分镜、{chars} 位角色，已提取全局设定与故事梗概。", { shots, chars })}
+      </span>
+      <div className="ai-gen-actions">
+        <button
+          className="btn btn-sm"
+          onClick={() =>
+            onAdopt(<>{tf("✓ 已填入全局设定与 {shots} 个分镜，请在左侧逐项检查。", { shots })}</>)
+          }
+        >
+          {t("一键填入全局及分镜")}
+        </button>
+      </div>
     </>
   );
 }
@@ -309,10 +289,11 @@ function FreeTextResult({ v }: { v: string }) {
 type Msg =
   | { id: string; role: "user"; kind: "user"; text: string }
   | { id: string; role: "bot"; kind: "text"; node: ReactNode }
-  | { id: string; role: "bot"; kind: "loading" }
+  | { id: string; role: "bot"; kind: "loading"; label?: string }
   | { id: string; role: "bot"; kind: "genproc"; flowKind: FlowKind; pct: number; status: string; summary: string }
   | { id: string; role: "bot"; kind: "result"; flowId: FlowId; ans: Ans; summary: string }
-  | { id: string; role: "bot"; kind: "free"; freeKind: "image" | "voice"; text: string };
+  | { id: string; role: "bot"; kind: "free"; freeKind: "image"; text: string }
+  | { id: string; role: "bot"; kind: "stream"; full: string; shown: number; done: boolean; idea: string | null };
 
 let seq = 0;
 const uid = () => "m" + ++seq;
@@ -327,29 +308,27 @@ function Intro({ model }: { model: ModelKind }): ReactNode {
         {t("，再为你生成参考图，可一键挂到对应字段。")}
       </>
     );
-  if (model === "text")
-    return (
-      <>
-        {t("你好，我是剧情助手。我来")}
-        <strong>{t("一个一个问题")}</strong>
-        {t("问你，逐步定制短剧剧情。每题都可以点「跳过」让我自由发挥，也可以直接在下方自己输入。")}
-      </>
-    );
   return (
     <>
-      {t("你好，我是配音助手。选一个入口，我会")}
-      <strong>{t("逐步提问")}</strong>
-      {t("，再为你合成配音 / 音效 / 背景音乐。")}
+      {t("你好，我是剧情助手。你可以")}
+      <strong>{t("导入已有剧本")}</strong>
+      {t("一键填入全局与分镜，也可以让我")}
+      <strong>{t("一步步提问")}</strong>
+      {t("帮你从零写出剧本。")}
     </>
   );
 }
 
+type TextMode = "choose" | "hasScript" | "noScript";
+
 export function AiPanel() {
   const t = useT();
+  const tf = useTf();
   const [model, setModel] = useState<ModelKind>("image");
   const [selectedModel, setSelectedModel] = useState(MODEL_OPTIONS.image[0]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [textMode, setTextMode] = useState<TextMode>("choose");
 
   const [flowId, setFlowId] = useState<FlowId | null>(null);
   const [flowStep, setFlowStep] = useState(0);
@@ -372,16 +351,12 @@ export function AiPanel() {
   const hint =
     model === "image"
       ? "为角色 / 场景 / 道具生成参考图，可直接挂到对应字段。"
-      : model === "text"
-      ? "生成短剧剧情、分镜脚本与台词建议。"
-      : "为角色台词 / 旁白生成配音，并合成环境音效与背景音乐。";
+      : "生成短剧剧情、分镜脚本与台词建议。";
 
   const placeholder =
     model === "image"
       ? "描述你想生成的角色 / 场景 / 道具…"
-      : model === "text"
-      ? "回答上面的问题，或自己描述剧情…"
-      : "描述你想要的配音音色 / 音效 / 音乐…";
+      : "回答上面的问题，或自己描述剧情…";
 
   function switchModel(next: ModelKind) {
     setModel(next);
@@ -389,13 +364,36 @@ export function AiPanel() {
     setFlowId(null);
     setFlowStep(0);
     setFlowAns({});
+    setTextMode("choose");
     const startMsgs: Msg[] = [{ id: uid(), role: "bot", kind: "text", node: <Intro model={next} /> }];
     setMessages(startMsgs);
-    if (next === "text") {
-      setFlowId("story");
-      setFlowStep(0);
-      setFlowAns({});
-    }
+  }
+
+  function chooseText(mode: TextMode) {
+    setTextMode(mode);
+    if (mode === "noScript") startFlow("story");
+  }
+
+  function backToTextChoose() {
+    setFlowId(null);
+    setTextMode("choose");
+  }
+
+  function importScript(name: string, shots: number, chars: number) {
+    const label = name || t("粘贴的剧本");
+    setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: tf("导入剧本：{name}", { name: label }) }]);
+    const lid = uid();
+    setMessages((m) => [...m, { id: lid, role: "bot", kind: "loading" }]);
+    const timer = window.setTimeout(() => {
+      setMessages((m) =>
+        m.map((x) =>
+          x.id === lid
+            ? { id: lid, role: "bot", kind: "text", node: <ScriptImportResult shots={shots} chars={chars} onAdopt={pushBotText} /> }
+            : x,
+        ),
+      );
+    }, 1100);
+    timers.current.push(timer);
   }
 
   function startGeneration(id: FlowId, ans: Ans) {
@@ -485,27 +483,51 @@ export function AiPanel() {
     timers.current.push(t);
   }
 
+  function streamReply(full: string, idea: string | null) {
+    const mid = uid();
+    setMessages((m) => [...m, { id: mid, role: "bot", kind: "loading", label: t("正在思考…") }]);
+    const startTimer = window.setTimeout(() => {
+      setMessages((m) => m.map((x) => (x.id === mid ? { id: mid, role: "bot", kind: "stream", full, shown: 0, done: false, idea } : x)));
+      let shown = 0;
+      const timer = window.setInterval(() => {
+        shown = Math.min(full.length, shown + 2);
+        const done = shown >= full.length;
+        setMessages((m) => m.map((x) => (x.id === mid && x.kind === "stream" ? { ...x, shown, done } : x)));
+        if (done) {
+          window.clearInterval(timer);
+          timers.current = timers.current.filter((tt) => tt !== timer);
+        }
+      }, 26);
+      timers.current.push(timer);
+    }, 650);
+    timers.current.push(startTimer);
+  }
+
   function freeSend(v: string) {
     setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: v }]);
+
+    if (model === "text") {
+      const c = classifyText(v);
+      if (c === "idea") {
+        streamReply(tf("好的，我按「{v}」帮你拓展一段短剧的分镜：", { v }), v);
+      } else if (c === "greeting") {
+        streamReply(t("你好！我是剧情助手。直接描述你想要的短剧——题材、主角，或一句话梗概都行，我就帮你拓展成分镜；也可以点下面的选项让我一步步问你。"), null);
+      } else if (c === "help") {
+        streamReply(t("我可以根据你的想法生成短剧剧情与分镜：给我题材、主角或一句话梗概，我会拓展成「开场 / 转折 / 收束」的分镜。你也可以切到「已有剧本」导入并一键填入。"), null);
+      } else {
+        streamReply(t("不客气！想继续拓展剧情或调整分镜，随时告诉我。"), null);
+      }
+      return;
+    }
+
     const lid = uid();
     setMessages((m) => [...m, { id: lid, role: "bot", kind: "loading" }]);
-    const captured = model;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setMessages((m) =>
-        m.map((x) => {
-          if (x.id !== lid) return x;
-          if (captured === "image") return { id: lid, role: "bot", kind: "free", freeKind: "image", text: v };
-          if (captured === "voice") return { id: lid, role: "bot", kind: "free", freeKind: "voice", text: v };
-          return {
-            id: lid,
-            role: "bot",
-            kind: "text",
-            node: <FreeTextResult v={v} />,
-          };
-        }),
+        m.map((x) => (x.id === lid ? { id: lid, role: "bot", kind: "free", freeKind: "image", text: v } : x)),
       );
     }, 1000);
-    timers.current.push(t);
+    timers.current.push(timer);
   }
 
   function onSend() {
@@ -531,14 +553,14 @@ export function AiPanel() {
           </span>
         </div>
         <div className="segmented ai-model">
-          {(["image", "text", "voice"] as ModelKind[]).map((k) => (
+          {(["image", "text"] as ModelKind[]).map((k) => (
             <button
               key={k}
               type="button"
               className={model === k ? "active" : undefined}
               onClick={() => switchModel(k)}
             >
-              {k === "image" ? t("生图模型") : k === "text" ? t("文字模型") : t("语音模型")}
+              {k === "image" ? t("生图模型") : t("文字模型")}
             </button>
           ))}
         </div>
@@ -563,17 +585,24 @@ export function AiPanel() {
 
       <QuickArea
         model={model}
+        textMode={textMode}
         flowId={flowId}
         flowStep={flowStep}
         flowAns={flowAns}
         onStart={startFlow}
-        onCancel={() => setFlowId(null)}
+        onCancel={() => {
+          setFlowId(null);
+          if (model === "text") setTextMode("choose");
+        }}
         onSelect={(v) => selectOption(v, false)}
         onSkip={() => selectOption(null, true)}
         onPrev={() => gotoStep(flowStep - 1)}
         onJump={(i) => gotoStep(i)}
         onRestartStory={() => startFlow("story")}
         onPreset={sendPreset}
+        onChooseText={chooseText}
+        onBackChoose={backToTextChoose}
+        onImport={importScript}
       />
 
       <div className="ai-input">
@@ -633,28 +662,30 @@ function MessageBody({
   if (msg.kind === "user") return <>{msg.text}</>;
   if (msg.kind === "text") return <>{msg.node}</>;
   if (msg.kind === "loading")
-    return (
+    return msg.label ? (
+      <span className="ai-thinking">
+        <span className="ai-thinking-label">{msg.label}</span>
+        <span className="ai-dots">
+          <i />
+          <i />
+          <i />
+        </span>
+      </span>
+    ) : (
       <span className="ai-dots">
         <i />
         <i />
         <i />
       </span>
     );
+  if (msg.kind === "stream") return <StreamBubble msg={msg} onAdopt={onAdopt} />;
   if (msg.kind === "genproc") {
     return (
       <div className="ai-genproc">
-        {msg.flowKind === "voice" ? (
-          <div className="ai-genproc-wave">
-            {waveHeights(28).map((h, i) => (
-              <i key={i} style={{ height: h + "%" }} />
-            ))}
-          </div>
-        ) : (
-          <div className="ai-genproc-canvas">
-            <span className="pct mono">{Math.round(msg.pct)}%</span>
-          </div>
-        )}
-        <div className="ai-genproc-status">{msg.flowKind === "voice" ? t("合成中…") : t(msg.status)}</div>
+        <div className="ai-genproc-canvas">
+          <span className="pct mono">{Math.round(msg.pct)}%</span>
+        </div>
+        <div className="ai-genproc-status">{t(msg.status)}</div>
         <div className="ai-genproc-bar">
           <i style={{ width: msg.pct + "%" }} />
         </div>
@@ -668,19 +699,10 @@ function MessageBody({
     const hue = hueOf(msg.text);
     return (
       <>
-        {msg.freeKind === "image" ? (
-          <>
-            {t("已根据描述生成参考图：")}
-            <div className="ai-scene-img" style={{ ["--ph" as string]: hue }}>
-              <span>{msg.text.slice(0, 16)}</span>
-            </div>
-          </>
-        ) : (
-          <>
-            {t("已根据描述合成音频：")}
-            <AudioCard dur="0:06" />
-          </>
-        )}
+        {t("已根据描述生成参考图：")}
+        <div className="ai-scene-img" style={{ ["--ph" as string]: hue }}>
+          <span>{msg.text.slice(0, 16)}</span>
+        </div>
         <div className="ai-gen-actions">
           <button className="btn btn-sm" onClick={() => onAdopt(<>{t("✓ 已采用，可在对应字段查看。")}</>)}>
             {t("采用")}
@@ -781,38 +803,25 @@ function ResultCard({
       </>
     );
   }
-  if (flowId === "story") {
-    const genre = ans.genre || "都市";
-    const lead = ans.lead || "主角";
-    return (
-      <>
-        <strong>{titleFor(genre)}</strong> · {t(genre)}
-        {ans.tone ? " · " + t(ans.tone) : ""} · {t(ans.length || "约 8 秒")}
-        <br />
-        <span className="dim">{summary}</span>
-        <Beats
-          beats={[
-            { n: "01", text: `开场：建立${lead}的处境，${genre}氛围铺陈。` },
-            { n: "02", text: `转折：${ans.conflict || "冲突"}爆发，进入「${ans.plot || "反转"}」的关键一刻。` },
-            { n: "03", text: `收束：${ans.tone || "情绪"}落点，留一个钩子引向下一集。` },
-          ]}
-        />
-        <div className="ai-gen-actions">
-          {adopt(t("写入字段 09 故事内容"))}
-          {regen(t("重写"))}
-        </div>
-      </>
-    );
-  }
-  // voice*
-  const meta = VOICE_META[flowId];
+  // story
+  const genre = ans.genre || "都市";
+  const lead = ans.lead || "主角";
   return (
     <>
-      {tf("已合成音频（{summary}）：", { summary })}
-      <AudioCard dur={meta.dur} />
+      <strong>{titleFor(genre)}</strong> · {t(genre)}
+      {ans.tone ? " · " + t(ans.tone) : ""} · {t(ans.length || "约 8 秒")}
+      <br />
+      <span className="dim">{summary}</span>
+      <Beats
+        beats={[
+          { n: "01", text: `开场：建立${lead}的处境，${genre}氛围铺陈。` },
+          { n: "02", text: `转折：${ans.conflict || "冲突"}爆发，进入「${ans.plot || "反转"}」的关键一刻。` },
+          { n: "03", text: `收束：${ans.tone || "情绪"}落点，留一个钩子引向下一集。` },
+        ]}
+      />
       <div className="ai-gen-actions">
-        {adopt(tf("用作 {target}", { target: t(meta.target) }))}
-        {regen(t("重新生成"))}
+        {adopt(t("写入字段 09 故事内容"))}
+        {regen(t("重写"))}
       </div>
     </>
   );
@@ -820,6 +829,7 @@ function ResultCard({
 
 function QuickArea({
   model,
+  textMode,
   flowId,
   flowStep,
   flowAns,
@@ -831,8 +841,12 @@ function QuickArea({
   onJump,
   onRestartStory,
   onPreset,
+  onChooseText,
+  onBackChoose,
+  onImport,
 }: {
   model: ModelKind;
+  textMode: TextMode;
   flowId: FlowId | null;
   flowStep: number;
   flowAns: Ans;
@@ -844,6 +858,9 @@ function QuickArea({
   onJump: (i: number) => void;
   onRestartStory: () => void;
   onPreset: (i: number) => void;
+  onChooseText: (mode: TextMode) => void;
+  onBackChoose: () => void;
+  onImport: (name: string, shots: number, chars: number) => void;
 }) {
   const t = useT();
   const tf = useTf();
@@ -908,21 +925,29 @@ function QuickArea({
       </div>
     );
   }
-  if (model === "voice") {
+  // model === "text"
+  if (textMode === "choose") {
     return (
       <div className="ai-quick">
-        <div className="ai-qlabel">{t("配音 / 音效 · 点开后逐步提问")}</div>
+        <div className="ai-qlabel">{t("先选择一种方式开始：")}</div>
         <div className="ai-actions">
-          <ActionBtn icon={I.mic} bg="var(--layer-shot-soft)" fg="var(--layer-shot)" title={t("角色配音")} sub={t("音色 / 情绪 / 语速")} onClick={() => onStart("voiceCast")} />
-          <ActionBtn icon={I.sfx} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("环境音效")} sub={t("类型 / 强度")} onClick={() => onStart("voiceAmb")} />
-          <ActionBtn icon={I.music} bg="var(--layer-output-soft)" fg="var(--layer-output)" title={t("背景音乐")} sub={t("风格 / 情绪 / 节奏")} onClick={() => onStart("voiceBgm")} />
+          <ActionBtn icon={I.film} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("已有剧本")} sub={t("导入剧本，一键填入全局及分镜")} onClick={() => onChooseText("hasScript")} />
+          <ActionBtn icon={I.spark} bg="var(--layer-shot-soft)" fg="var(--layer-shot)" title={t("没有剧本")} sub={t("问题引导，一步步写出剧本")} onClick={() => onChooseText("noScript")} />
         </div>
       </div>
     );
   }
+  if (textMode === "hasScript") {
+    return <ScriptUpload onImport={onImport} onBack={onBackChoose} />;
+  }
   return (
     <div className="ai-quick">
-      <div className="ai-qlabel">{t("想再来一个？")}</div>
+      <div className="ai-qlabel">
+        {t("想再来一个？")}
+        <button className="back" onClick={onBackChoose}>
+          {I.arrow} {t("重新选择")}
+        </button>
+      </div>
       <button className="btn btn-primary ai-gen-btn" onClick={onRestartStory}>
         ↻ {t("重新开始提问")}
       </button>
@@ -935,6 +960,71 @@ function QuickArea({
           {p.q}
         </button>
       ))}
+    </div>
+  );
+}
+
+function ScriptUpload({
+  onImport,
+  onBack,
+}: {
+  onImport: (name: string, shots: number, chars: number) => void;
+  onBack: () => void;
+}) {
+  const t = useT();
+  const tf = useTf();
+  const [text, setText] = useState("");
+  const [fileName, setFileName] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFileName(f.name);
+    if (/\.txt$/i.test(f.name)) {
+      const reader = new FileReader();
+      reader.onload = () => setText(String(reader.result || ""));
+      reader.readAsText(f);
+    }
+    e.target.value = "";
+  };
+
+  const canImport = text.trim().length > 0 || fileName.length > 0;
+  const doImport = () => {
+    if (!canImport) return;
+    const { shots, chars } = deriveScriptStats(text);
+    onImport(fileName, shots, chars);
+    setText("");
+    setFileName("");
+  };
+
+  return (
+    <div className="ai-quick">
+      <div className="ai-qlabel">
+        {t("粘贴剧本，或上传 Word / txt 文件")}
+        <button className="back" onClick={onBack}>
+          {I.arrow} {t("返回")}
+        </button>
+      </div>
+      <textarea
+        className="input"
+        style={{ minHeight: 96, resize: "vertical", width: "100%" }}
+        placeholder={t("在此粘贴剧本文字…")}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className="ai-nav-row">
+        <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
+          {t("上传文件")}
+        </button>
+        <span className="ai-skiphint">
+          {fileName ? tf("已选择：{name}", { name: fileName }) : t("支持 .txt / .doc / .docx")}
+        </span>
+      </div>
+      <input ref={fileRef} type="file" accept=".txt,.doc,.docx" hidden onChange={onFile} />
+      <button className="btn btn-primary ai-gen-btn" disabled={!canImport} onClick={doImport}>
+        {t("解析并填入")}
+      </button>
     </div>
   );
 }
