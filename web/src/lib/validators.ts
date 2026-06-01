@@ -44,11 +44,18 @@ export function filledShotCount(s: Shot): number {
   return SHOT_FIELD_IDS.filter((id) => isShotFilled(s, id)).length;
 }
 
+/** 软提示项：分镜未填角色动作。idx 已补零（"01"），name 为分镜名（可为空）。
+ *  文案在渲染层用 i18n 组装，这里只给结构化数据，保证语言可切换。 */
+export interface ShotWarning {
+  idx: string;
+  name: string;
+}
+
 export interface ValidationResult {
-  /** 硬性缺失：缺这些不能生成（仅全局必填项） */
+  /** 硬性缺失：缺这些不能生成（仅全局必填项）。返回中文 canonical，由渲染层翻译。 */
   missing: string[];
   /** 软提示：建议补但不阻断生成（如分镜未填角色动作） */
-  warnings: string[];
+  warnings: ShotWarning[];
   canGenerate: boolean;
 }
 
@@ -60,12 +67,10 @@ export function computeValidation(p: Project): ValidationResult {
 
   // 分镜可选（v0.9.5）：分镜「角色动作」缺失降级为软提示，不再阻断生成。
   // 没有分镜也允许生成（按全局设定整体出片）。
-  const warnings: string[] = [];
+  const warnings: ShotWarning[] = [];
   p.shots.forEach((s, i) => {
     if (!isShotFilled(s, "action")) {
-      const idx = String(i + 1).padStart(2, "0");
-      const name = s.name ? `「${s.name}」` : "";
-      warnings.push(`分镜${idx}${name} · 未填角色动作`);
+      warnings.push({ idx: String(i + 1).padStart(2, "0"), name: s.name ?? "" });
     }
   });
 

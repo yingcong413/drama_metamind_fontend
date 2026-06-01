@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useT } from "@/lib/i18n";
 import { Tag, type TagKind } from "./Tag";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function Field({ num, title, tags = [], help, example, children }: Props) {
+  const t = useT();
   return (
     <div className="field">
       <div className="field-header">
@@ -22,7 +24,7 @@ export function Field({ num, title, tags = [], help, example, children }: Props)
       {children}
       {example && (
         <div className="field-example">
-          <span className="ex-label">案例</span>
+          <span className="ex-label">{t("案例")}</span>
           {example}
         </div>
       )}

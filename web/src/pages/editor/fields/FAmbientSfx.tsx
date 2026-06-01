@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { CloseIcon, PlayIcon, UploadIcon } from "@/components/icons";
 import { Tag } from "@/components/primitives/Tag";
+import { useT } from "@/lib/i18n";
 import type { OutputLayer } from "@/types";
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function FAmbientSfx({ value, set }: Props) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [audioLabel, setAudioLabel] = useState<string | null>(null);
 
@@ -37,12 +39,12 @@ export function FAmbientSfx({ value, set }: Props) {
             fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em",
           }}
         >
-          文字描述
+          {t("文字描述")}
         </div>
         <input
           className="input"
           style={{ padding: "10px 14px", fontSize: 14 }}
-          placeholder='如："咖啡厅白噪声"、"雨声"、"街道喧嚣"、"安静书房"'
+          placeholder={t('如："咖啡厅白噪声"、"雨声"、"街道喧嚣"、"安静书房"')}
           value={value.ambient_sfx ?? ""}
           onChange={(e) => set({ ...value, ambient_sfx: e.target.value })}
         />
@@ -57,7 +59,7 @@ export function FAmbientSfx({ value, set }: Props) {
             display: "flex", alignItems: "center", gap: 8,
           }}
         >
-          上传参考音频 <Tag kind="opt" />
+          {t("上传参考音频")} <Tag kind="opt" />
         </div>
         {audioLabel ? (
           <div
@@ -77,7 +79,7 @@ export function FAmbientSfx({ value, set }: Props) {
               <PlayIcon />
             </div>
             <div style={{ flex: 1, fontSize: 12, fontFamily: "var(--font-mono)" }}>{audioLabel}</div>
-            <button className="btn-ghost btn-sm" onClick={pickFile}>替换</button>
+            <button className="btn-ghost btn-sm" onClick={pickFile}>{t("替换")}</button>
             <button className="btn-ghost btn-sm" onClick={() => setAudioLabel(null)}>
               <CloseIcon />
             </button>
@@ -88,7 +90,7 @@ export function FAmbientSfx({ value, set }: Props) {
             style={{ justifyContent: "flex-start", padding: "10px 14px", width: "100%" }}
             onClick={pickFile}
           >
-            <UploadIcon /> 上传或拖拽音频文件 · 支持 mp3 / wav / m4a
+            <UploadIcon /> {t("上传或拖拽音频文件 · 支持 mp3 / wav / m4a")}
           </button>
         )}
       </div>

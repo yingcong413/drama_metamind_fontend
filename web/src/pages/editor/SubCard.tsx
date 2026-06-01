@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Tag, type TagKind } from "@/components/primitives/Tag";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   num: string;
@@ -13,19 +14,20 @@ interface Props {
 }
 
 export function SubCard({ num, title, tags = [], required, help, example, anchor, children }: Props) {
+  const t = useT();
   return (
     <div className={`subfield-card ${required ? "required" : ""}`} data-anchor={anchor}>
       <div className="field-header">
         <span className="field-num">{num}</span>
-        <span className="field-title">{title}</span>
-        {tags.map((t, i) => <Tag key={i} kind={t} />)}
+        <span className="field-title">{t(title)}</span>
+        {tags.map((tg, i) => <Tag key={i} kind={tg} />)}
         {required && <span className="dot-req" style={{ marginLeft: 4 }} />}
       </div>
-      {help && <div className="field-help">{help}</div>}
+      {help && <div className="field-help">{t(help)}</div>}
       {children}
       {example && (
         <div className="field-example">
-          <span className="ex-label">案例</span>{example}
+          <span className="ex-label">{t("案例")}</span>{t(example)}
         </div>
       )}
     </div>

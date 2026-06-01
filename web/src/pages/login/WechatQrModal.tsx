@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n";
 
 interface QrData {
   state: string;
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function WechatQrModal({ onClose, onSuccess }: Props) {
+  const t = useT();
   const [qr, setQr] = useState<QrData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -95,38 +97,38 @@ export function WechatQrModal({ onClose, onSuccess }: Props) {
         <button
           className="btn-ghost btn-icon"
           onClick={onClose}
-          title="关闭"
+          title={t("关闭")}
           style={{ position: "absolute", top: 10, right: 10 }}
         >
           <CloseIcon />
         </button>
-        <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 600 }}>微信扫码登录</h3>
+        <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 600 }}>{t("微信扫码登录")}</h3>
         <p className="dim-2" style={{ fontSize: 12, marginBottom: 18 }}>
-          请使用微信扫描下方二维码授权
+          {t("请使用微信扫描下方二维码授权")}
         </p>
         {error ? (
           <div style={{ color: "oklch(72% .15 25)", fontSize: 13, padding: "20px 0" }}>
-            加载失败:{error}
+            {t("加载失败")}:{error}
           </div>
         ) : !qr ? (
-          <div className="dim-2" style={{ padding: "60px 0" }}>正在生成二维码…</div>
+          <div className="dim-2" style={{ padding: "60px 0" }}>{t("正在生成二维码…")}</div>
         ) : (
           <>
             <img
               src={qr.qrcode_url}
-              alt="微信扫码登录"
+              alt={t("微信扫码登录")}
               style={{ width: 220, height: 220, borderRadius: 8, background: "#fff", padding: 8 }}
             />
             {qr.mock && (
               <div className="dim-2" style={{ fontSize: 11, marginTop: 12, lineHeight: 1.6 }}>
-                ⓘ 当前是 mock 模式,2 秒后自动登录成 mock 微信用户。
+                {t("ⓘ 当前是 mock 模式,2 秒后自动登录成 mock 微信用户。")}
                 <br />
-                正式模式需在服务器 .env 配置 WECHAT_APP_ID 等。
+                {t("正式模式需在服务器 .env 配置 WECHAT_APP_ID 等。")}
               </div>
             )}
             {!qr.mock && (
               <div className="dim-2" style={{ fontSize: 11, marginTop: 12 }}>
-                二维码 10 分钟内有效
+                {t("二维码 10 分钟内有效")}
               </div>
             )}
           </>

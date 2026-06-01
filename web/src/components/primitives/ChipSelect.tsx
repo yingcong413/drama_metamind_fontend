@@ -1,3 +1,5 @@
+import { useT } from "@/lib/i18n";
+
 interface SingleProps {
   options: string[];
   value: string | null | undefined;
@@ -15,6 +17,7 @@ interface MultiProps {
 type Props = SingleProps | MultiProps;
 
 export function ChipSelect(props: Props) {
+  const t = useT();
   const isSel = (o: string) => {
     if (props.multi) return (props.value ?? []).includes(o);
     return props.value === o;
@@ -37,7 +40,7 @@ export function ChipSelect(props: Props) {
           className={`chip ${isSel(o) ? "selected " + (props.layerClass ?? "") : ""}`}
           onClick={() => toggle(o)}
         >
-          {o}
+          {t(o)}
         </button>
       ))}
     </div>

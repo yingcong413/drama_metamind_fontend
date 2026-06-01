@@ -1,3 +1,4 @@
+import { useT, useTf } from "@/lib/i18n";
 import type { Project, Shot } from "@/types";
 
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
 }
 
 export function FShotDuration({ value, set, project }: Props) {
+  const t = useT();
+  const tf = useTf();
   const total = project.global.total_duration_seconds;
   const cur = value.duration_seconds;
 
@@ -33,7 +36,7 @@ export function FShotDuration({ value, set, project }: Props) {
   if (total == null) {
     return (
       <div className="dim-2" style={{ fontSize: 12, lineHeight: 1.7 }}>
-        请先在「全局场景层 · 01 视频总时长」设置整支视频的总时长，再为单个分镜分配时长。
+        {t("请先在「全局场景层 · 01 视频总时长」设置整支视频的总时长，再为单个分镜分配时长。")}
       </div>
     );
   }
@@ -50,25 +53,25 @@ export function FShotDuration({ value, set, project }: Props) {
           max={maxForThis ?? undefined}
           step={1}
           style={{ width: 140, padding: "10px 14px", fontSize: 14 }}
-          placeholder="留空 = 自动分配"
+          placeholder={t("留空 = 自动分配")}
           value={cur ?? ""}
           onChange={(e) => onChange(e.target.value)}
         />
-        <span className="dim-2" style={{ fontSize: 12 }}>秒</span>
+        <span className="dim-2" style={{ fontSize: 12 }}>{t("秒")}</span>
         {cur != null && (
           <button
             className="btn-ghost btn-sm"
             onClick={() => set({ ...value, duration_seconds: null })}
           >
-            清空（改为自动分配）
+            {t("清空（改为自动分配）")}
           </button>
         )}
       </div>
 
       <div className="dim-2" style={{ fontSize: 12, lineHeight: 1.7 }}>
-        视频总时长 <span className="mono" style={{ color: "var(--text)" }}>{total}s</span>
-        {" · "}其他分镜已占 <span className="mono">{othersSum}s</span>
-        {" · "}本分镜最多可填{" "}
+        {t("视频总时长")} <span className="mono" style={{ color: "var(--text)" }}>{total}s</span>
+        {" · "}{t("其他分镜已占")} <span className="mono">{othersSum}s</span>
+        {" · "}{t("本分镜最多可填")}{" "}
         <span
           className="mono"
           style={{
@@ -80,14 +83,14 @@ export function FShotDuration({ value, set, project }: Props) {
         </span>
         {autoCount > 0 && (
           <>
-            {" · "}另有 <span className="mono">{autoCount}</span> 个分镜未指定，将自动均摊剩余时长
+            {" · "}{t("另有")} <span className="mono">{autoCount}</span> {t("个分镜未指定，将自动均摊剩余时长")}
           </>
         )}
       </div>
 
       {overBudget && (
         <div style={{ fontSize: 12, color: "oklch(72% .15 25)" }}>
-          已超出可分配时长，请调小到 {maxForThis}s 以内。
+          {tf("已超出可分配时长，请调小到 {n}s 以内。", { n: maxForThis ?? 0 })}
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n";
 import type { Shot } from "@/types";
 
 interface Props {
@@ -6,11 +7,12 @@ interface Props {
 }
 
 export function FSfx({ value, set }: Props) {
+  const t = useT();
   return (
     <input
       className="input"
       style={{ padding: "10px 14px", fontSize: 14 }}
-      placeholder='如："拳击落点"、"玻璃碎裂"、"书页翻动"、"戒指盒触桌的轻响"'
+      placeholder={t('如："拳击落点"、"玻璃碎裂"、"书页翻动"、"戒指盒触桌的轻响"')}
       value={value.sfx ?? ""}
       onChange={(e) => set({ ...value, sfx: e.target.value })}
     />

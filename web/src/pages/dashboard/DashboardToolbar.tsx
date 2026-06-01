@@ -1,6 +1,7 @@
 import { PlusIcon, SearchIcon } from "@/components/icons";
 import type { ProjectStatus } from "@/types";
 import { cn } from "@/lib/cn";
+import { useT, useTf } from "@/lib/i18n";
 
 export type StatusFilter = ProjectStatus | "all";
 
@@ -14,20 +15,22 @@ interface Props {
 }
 
 export function DashboardToolbar({ filter, setFilter, counts, q, setQ, onCreate }: Props) {
+  const t = useT();
+  const tf = useTf();
   return (
     <div className="controls">
       <div className="segmented">
         <button className={cn(filter === "all" && "active")} onClick={() => setFilter("all")}>
-          全部
+          {t("全部")}
         </button>
         <button className={cn(filter === "draft" && "active")} onClick={() => setFilter("draft")}>
-          草稿 · {counts.draft}
+          {tf("草稿 · {n}", { n: counts.draft })}
         </button>
         <button className={cn(filter === "done" && "active")} onClick={() => setFilter("done")}>
-          已生成 · {counts.done}
+          {tf("已生成 · {n}", { n: counts.done })}
         </button>
         <button className={cn(filter === "gen" && "active")} onClick={() => setFilter("gen")}>
-          生成中 · {counts.gen}
+          {tf("生成中 · {n}", { n: counts.gen })}
         </button>
       </div>
       <div
@@ -45,13 +48,13 @@ export function DashboardToolbar({ filter, setFilter, counts, q, setQ, onCreate 
         <SearchIcon />
         <input
           style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text)", fontSize: 13 }}
-          placeholder="搜索项目…"
+          placeholder={t("搜索项目…")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
       <button className="btn-primary btn" onClick={onCreate}>
-        <PlusIcon /> 新建项目
+        <PlusIcon /> {t("新建项目")}
       </button>
     </div>
   );

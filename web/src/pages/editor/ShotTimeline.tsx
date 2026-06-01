@@ -1,4 +1,5 @@
 import { PlusIcon } from "@/components/icons";
+import { useT, useTf } from "@/lib/i18n";
 import { filledShotCount } from "@/lib/validators";
 import type { Project } from "@/types";
 
@@ -10,11 +11,13 @@ interface Props {
 }
 
 export function ShotTimeline({ project, activeShot, onSelect, onAdd }: Props) {
+  const t = useT();
+  const tf = useTf();
   const totalDur = (0.6 + project.shots.length * 0.2 + 1.4).toFixed(1);
   return (
     <div className="timeline-bar">
       <div className="dim-2 mono" style={{ fontSize: 11, padding: "0 8px", whiteSpace: "nowrap" }}>
-        分镜时间轴
+        {t("分镜时间轴")}
       </div>
       {project.shots.map((s, i) => {
         const isActive = activeShot === s.id;
@@ -51,7 +54,7 @@ export function ShotTimeline({ project, activeShot, onSelect, onAdd }: Props) {
                 fontWeight: isActive ? 700 : 600,
               }}
             >
-              分镜 {String(i + 1).padStart(2, "0")}
+              {tf("分镜 {n}", { n: String(i + 1).padStart(2, "0") })}
             </span>
             <div
               style={{
@@ -64,7 +67,7 @@ export function ShotTimeline({ project, activeShot, onSelect, onAdd }: Props) {
                 whiteSpace: "nowrap",
               }}
             >
-              {s.name}
+              {t(s.name)}
             </div>
             <div
               style={{
@@ -79,12 +82,12 @@ export function ShotTimeline({ project, activeShot, onSelect, onAdd }: Props) {
           </div>
         );
       })}
-      <button className="timeline-add" onClick={onAdd} title="添加分镜">
+      <button className="timeline-add" onClick={onAdd} title={t("添加分镜")}>
         <PlusIcon />
       </button>
       <div style={{ flex: 1 }} />
       <div className="dim-2 mono" style={{ fontSize: 11, whiteSpace: "nowrap" }}>
-        总时长 ≈ {totalDur}s
+        {tf("总时长 ≈ {n}s", { n: totalDur })}
       </div>
     </div>
   );

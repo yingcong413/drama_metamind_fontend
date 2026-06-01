@@ -15,6 +15,7 @@ import { useRef, useState } from "react";
 import { uploadAsset, deleteAsset } from "@/api/assets";
 import { useAssetPolling } from "@/hooks/useAssetPolling";
 import { validateAssetFile } from "@/lib/assetValidator";
+import { useT, useTf } from "@/lib/i18n";
 import { TrashIcon, UploadIcon, MicIcon } from "@/components/icons";
 import type { Asset, AssetKind, AssetRole } from "@/types";
 import { AssetStatusBadge } from "./AssetStatusBadge";
@@ -36,6 +37,8 @@ export function SingleAssetSlot({
   characterId,
   onChange,
 }: SingleSlotProps) {
+  const t = useT();
+  const tf = useTf();
   const inputRef = useRef<HTMLInputElement>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -90,7 +93,7 @@ export function SingleAssetSlot({
 
   const handleDelete = async () => {
     if (!current) return;
-    if (!confirm(`确定删除「${current.original_filename}」？`)) return;
+    if (!confirm(tf("确定删除「{name}」？", { name: current.original_filename }))) return;
     await deleteAsset(current.id);
     setLocalAsset(null);
     onChange();
@@ -164,7 +167,7 @@ export function SingleAssetSlot({
           <button
             className="btn btn-sm btn-ghost"
             onClick={handleDelete}
-            title="删除"
+            title={t("删除")}
             disabled={busy}
           >
             <TrashIcon />
@@ -178,7 +181,7 @@ export function SingleAssetSlot({
           disabled={busy}
         >
           {kind === "image" ? <UploadIcon /> : <MicIcon />}
-          {busy ? " 上传中…" : kind === "image" ? " 上传主图" : " 上传声线参考"}
+          {busy ? ` ${t("上传中…")}` : kind === "image" ? ` ${t("上传主图")}` : ` ${t("上传声线参考")}`}
         </button>
       )}
 
@@ -203,6 +206,7 @@ interface MultiGridProps {
 }
 
 export function MultiAssetGrid({ assets, kind, characterId, onChange }: MultiGridProps) {
+  const tf = useTf();
   const inputRef = useRef<HTMLInputElement>(null);
   const [issues, setIssues] = useState<string[]>([]);
   const [busyCount, setBusyCount] = useState(0);
@@ -241,7 +245,7 @@ export function MultiAssetGrid({ assets, kind, characterId, onChange }: MultiGri
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确定删除「${name}」？`)) return;
+    if (!confirm(tf("确定删除「{name}」？", { name }))) return;
     await deleteAsset(id);
     onChange();
   };
@@ -281,7 +285,7 @@ export function MultiAssetGrid({ assets, kind, characterId, onChange }: MultiGri
             <UploadIcon />
           </div>
           <div style={{ fontSize: 12 }}>
-            {busyCount > 0 ? `上传 ${busyCount} 个中…` : "添加更多角度"}
+            {busyCount > 0 ? tf("上传 {n} 个中…", { n: busyCount }) : tf("添加更多角度", {})}
           </div>
         </button>
       </div>
@@ -307,6 +311,7 @@ function MultiThumb({
   onChange: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const polling = useAssetPolling(
     asset.status === "processing" || asset.status === "uploading" ? asset.id : null,
     { onActive: onChange, onFailed: onChange }
@@ -343,7 +348,7 @@ function MultiThumb({
           e.stopPropagation();
           onDelete();
         }}
-        title="删除"
+        title={t("删除")}
         style={{ position: "absolute", right: 2, top: 2, padding: 4, background: "rgba(255,255,255,0.85)", borderRadius: 4 }}
       >
         <TrashIcon />

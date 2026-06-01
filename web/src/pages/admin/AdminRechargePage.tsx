@@ -17,6 +17,7 @@ import {
   type OrgSearchItem,
 } from "@/api/admin";
 import { formatYuan } from "@/lib/format";
+import { useT, useTf } from "@/lib/i18n";
 
 export function AdminRechargePage() {
   const isAdmin = useIsPlatformAdmin();
@@ -28,6 +29,8 @@ export function AdminRechargePage() {
 }
 
 function RechargeBody() {
+  const t = useT();
+  const tf = useTf();
   const qc = useQueryClient();
 
   // ── 搜组织 ──
@@ -75,9 +78,17 @@ function RechargeBody() {
       }),
     onSuccess: (r) => {
       alert(
-        `✓ 已${r.recharge.amount_cents < 0 ? "冲正" : "充值"} ¥${formatYuan(Math.abs(r.recharge.amount_cents))}\n` +
-        `${r.recharge.bonus_cents > 0 ? `(含赠送 ¥${formatYuan(r.recharge.bonus_cents)})\n` : ""}` +
-        `${selected!.name} 当前余额:¥${formatYuan(r.account.balance_cents)}`,
+        tf("✓ 已{action} ¥{amt}", {
+          action: r.recharge.amount_cents < 0 ? t("冲正") : t("充值"),
+          amt: formatYuan(Math.abs(r.recharge.amount_cents)),
+        }) + "\n" +
+        (r.recharge.bonus_cents > 0
+          ? tf("(含赠送 ¥{bonus})", { bonus: formatYuan(r.recharge.bonus_cents) }) + "\n"
+          : "") +
+        tf("{name} 当前余额:¥{balance}", {
+          name: selected!.name,
+          balance: formatYuan(r.account.balance_cents),
+        }),
       );
       // 清空表单 + 刷新流水 + 刷新搜索(余额变了)
       setSelected(null);
@@ -89,7 +100,7 @@ function RechargeBody() {
       qc.invalidateQueries({ queryKey: ["admin-recharges"] });
     },
     onError: (e) => {
-      alert(`充值失败:${e instanceof Error ? e.message : String(e)}`);
+      alert(tf("充值失败:{msg}", { msg: e instanceof Error ? e.message : String(e) }));
     },
   });
 
@@ -101,12 +112,11 @@ function RechargeBody() {
 
   return (
     <>
-      <AppTopBar crumbs={[{ label: "平台管理" }, { label: "手动充值" }]} />
+      <AppTopBar crumbs={[{ label: t("平台管理") }, { label: t("手动充值") }]} />
       <div className="char-lib" style={{ maxWidth: 960 }}>
-        <h1>手动充值 — 平台管理员</h1>
+        <h1>{t("手动充值 — 平台管理员")}</h1>
         <p className="char-lib-sub" style={{ marginBottom: 24 }}>
-          B2B 客户线下打款后,在这里把金额加到对应 org 的余额。**所有操作有完整流水**,审计可追溯。
-          负金额=冲正(撤销错单)。
+          {t("B2B 客户线下打款后,在这里把金额加到对应 org 的余额。**所有操作有完整流水**,审计可追溯。负金额=冲正(撤销错单)。")}
         </p>
 
         <section
@@ -121,7 +131,7 @@ function RechargeBody() {
           }}
         >
           {/* 1. 目标组织搜索 */}
-          <Field title="目标组织" required>
+          <Field title={t("目标组织")} required>
             {selected ? (
               <div
                 style={{
@@ -137,20 +147,20 @@ function RechargeBody() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{selected.name}</div>
                   <div className="dim-2" style={{ fontSize: 12 }}>
-                    {selected.account_type === "enterprise" ? "企业账户" : "个人账户"} ·
-                    Owner: {selected.owner_name} ({selected.owner_phone_masked || "无手机号"}) ·
-                    当前余额: <strong style={{ color: "var(--accent)" }}>¥{formatYuan(selected.balance_cents)}</strong>
+                    {selected.account_type === "enterprise" ? t("企业账户") : t("个人账户")} ·
+                    Owner: {selected.owner_name} ({selected.owner_phone_masked || t("无手机号")}) ·
+                    {t("当前余额:")} <strong style={{ color: "var(--accent)" }}>¥{formatYuan(selected.balance_cents)}</strong>
                   </div>
                 </div>
                 <button className="btn btn-sm" onClick={() => setSelected(null)}>
-                  换一个
+                  {t("换一个")}
                 </button>
               </div>
             ) : (
               <>
                 <input
                   className="input input-lg"
-                  placeholder="搜公司名 / org_id / Owner 手机号..."
+                  placeholder={t("搜公司名 / org_id / Owner 手机号...")}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   autoFocus
@@ -167,7 +177,7 @@ function RechargeBody() {
                     }}
                   >
                     {searchQuery.data.list.length === 0 ? (
-                      <div className="dim" style={{ padding: 12, fontSize: 13 }}>无匹配组织</div>
+                      <div className="dim" style={{ padding: 12, fontSize: 13 }}>{t("无匹配组织")}</div>
                     ) : (
                       searchQuery.data.list.map((o) => (
                         <button
@@ -193,9 +203,9 @@ function RechargeBody() {
                         >
                           <div style={{ fontWeight: 500 }}>{o.name}</div>
                           <div className="dim-2" style={{ fontSize: 11, marginTop: 2 }}>
-                            {o.account_type === "enterprise" ? "企业" : "个人"} ·
+                            {o.account_type === "enterprise" ? t("企业") : t("个人")} ·
                             Owner {o.owner_name} {o.owner_phone_masked} ·
-                            余额 ¥{formatYuan(o.balance_cents)}
+                            {t("余额")} ¥{formatYuan(o.balance_cents)}
                           </div>
                         </button>
                       ))
@@ -208,7 +218,7 @@ function RechargeBody() {
 
           {/* 2. 金额 / 赠送 */}
           <div style={{ display: "flex", gap: 16 }}>
-            <Field title="金额 (元)" required hint="可负为冲正">
+            <Field title={t("金额 (元)")} required hint={t("可负为冲正")}>
               <input
                 className="input input-lg"
                 type="number"
@@ -218,7 +228,7 @@ function RechargeBody() {
                 onChange={(e) => setAmountYuan(e.target.value)}
               />
             </Field>
-            <Field title="赠送 (元)" hint="冲正不能带赠送">
+            <Field title={t("赠送 (元)")} hint={t("冲正不能带赠送")}>
               <input
                 className="input input-lg"
                 type="number"
@@ -233,11 +243,11 @@ function RechargeBody() {
           </div>
 
           {/* 3. 备注 */}
-          <Field title="备注" required hint="对账依据,2-200 字">
+          <Field title={t("备注")} required hint={t("对账依据,2-200 字")}>
             <textarea
               className="textarea textarea-lg"
               rows={2}
-              placeholder="对公打款 2026-05-26 工行 ¥10000"
+              placeholder={t("对公打款 2026-05-26 工行 ¥10000")}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={200}
@@ -256,30 +266,30 @@ function RechargeBody() {
                 setNote("");
               }}
             >
-              取消
+              {t("取消")}
             </button>
             <button
               className="btn btn-primary"
               disabled={!canSubmit || recharge.isPending}
               onClick={() => setShowConfirm(true)}
             >
-              {recharge.isPending ? "充值中…" : "确认充值"}
+              {recharge.isPending ? t("充值中…") : t("确认充值")}
             </button>
           </div>
 
           {!canSubmit && (selected || amountYuan || note) && (
             <div className="dim-2" style={{ fontSize: 11, marginTop: -8 }}>
-              {!selected && "请先选目标组织;"}
-              {amountCents === 0 && "金额不能为 0;"}
-              {Math.abs(amountCents) > 100_000_000 && "金额超过单笔上限 ¥1,000,000;"}
-              {amountCents < 0 && bonusCents !== 0 && "冲正不能带赠送;"}
-              {(note.trim().length < 2 || note.trim().length > 200) && "备注必填(2-200 字)"}
+              {!selected && t("请先选目标组织;")}
+              {amountCents === 0 && t("金额不能为 0;")}
+              {Math.abs(amountCents) > 100_000_000 && t("金额超过单笔上限 ¥1,000,000;")}
+              {amountCents < 0 && bonusCents !== 0 && t("冲正不能带赠送;")}
+              {(note.trim().length < 2 || note.trim().length > 200) && t("备注必填(2-200 字)")}
             </div>
           )}
         </section>
 
         {/* 5. 流水 */}
-        <h2 style={{ marginTop: 32, fontSize: 18 }}>最近 50 笔充值流水</h2>
+        <h2 style={{ marginTop: 32, fontSize: 18 }}>{t("最近 50 笔充值流水")}</h2>
         <RechargeTable rows={recordsQuery.data?.list ?? []} loading={recordsQuery.isLoading} />
       </div>
 
@@ -327,8 +337,9 @@ function Field({
 }
 
 function RechargeTable({ rows, loading }: { rows: AdminRechargeRecord[]; loading: boolean }) {
+  const t = useT();
   if (loading) {
-    return <div className="dim" style={{ padding: 24 }}>加载中…</div>;
+    return <div className="dim" style={{ padding: 24 }}>{t("加载中…")}</div>;
   }
   if (rows.length === 0) {
     return (
@@ -342,7 +353,7 @@ function RechargeTable({ rows, loading }: { rows: AdminRechargeRecord[]; loading
           textAlign: "center",
         }}
       >
-        还没有充值流水
+        {t("还没有充值流水")}
       </div>
     );
   }
@@ -358,14 +369,14 @@ function RechargeTable({ rows, loading }: { rows: AdminRechargeRecord[]; loading
             textTransform: "uppercase",
           }}
         >
-          <th style={{ padding: 10, textAlign: "left" }}>时间</th>
-          <th style={{ padding: 10, textAlign: "left" }}>组织</th>
-          <th style={{ padding: 10, textAlign: "right" }}>金额</th>
-          <th style={{ padding: 10, textAlign: "right" }}>赠送</th>
-          <th style={{ padding: 10, textAlign: "left" }}>方式</th>
-          <th style={{ padding: 10, textAlign: "left" }}>操作人</th>
-          <th style={{ padding: 10, textAlign: "left" }}>备注</th>
-          <th style={{ padding: 10, textAlign: "left" }}>状态</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("时间")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("组织")}</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("金额")}</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("赠送")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("方式")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("操作人")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("备注")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("状态")}</th>
         </tr>
       </thead>
       <tbody>
@@ -405,9 +416,9 @@ function RechargeTable({ rows, loading }: { rows: AdminRechargeRecord[]; loading
             </td>
             <td style={{ padding: 10 }}>
               {r.status === "success" ? (
-                <span style={{ color: "oklch(70% .15 145)" }}>✓ 成功</span>
+                <span style={{ color: "oklch(70% .15 145)" }}>{t("✓ 成功")}</span>
               ) : r.status === "refunded" ? (
-                <span style={{ color: "oklch(72% .15 25)" }}>↩ 冲正</span>
+                <span style={{ color: "oklch(72% .15 25)" }}>{t("↩ 冲正")}</span>
               ) : (
                 <span className="dim-2">⋯ {r.status}</span>
               )}
@@ -436,6 +447,7 @@ function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const isRefund = amountCents < 0;
   const totalCredit = amountCents + bonusCents;
   return (
@@ -460,11 +472,11 @@ function ConfirmDialog({
         }}
       >
         <h2 style={{ marginTop: 0, fontSize: 18 }}>
-          {isRefund ? "⚠ 冲正确认" : "充值确认"}
+          {isRefund ? t("⚠ 冲正确认") : t("充值确认")}
         </h2>
         <div style={{ fontSize: 14, lineHeight: 1.8, color: "var(--text-secondary)" }}>
-          确认给 <strong style={{ color: "var(--text)" }}>{org.name}</strong>{" "}
-          {isRefund ? "扣减" : "充入"}{" "}
+          {t("确认给")} <strong style={{ color: "var(--text)" }}>{org.name}</strong>{" "}
+          {isRefund ? t("扣减") : t("充入")}{" "}
           <strong
             className="mono"
             style={{
@@ -476,11 +488,11 @@ function ConfirmDialog({
           </strong>
           {bonusCents > 0 && !isRefund && (
             <>
-              {" "}（含赠送{" "}
+              {" "}（{t("含赠送")}{" "}
               <strong className="mono" style={{ color: "var(--accent)" }}>
                 ¥{formatYuan(bonusCents)}
               </strong>
-              ，账户共增加{" "}
+              ，{t("账户共增加")}{" "}
               <strong className="mono">¥{formatYuan(totalCredit)}</strong>）
             </>
           )}
@@ -495,12 +507,12 @@ function ConfirmDialog({
             fontSize: 12,
           }}
         >
-          <div className="dim-2">备注</div>
+          <div className="dim-2">{t("备注")}</div>
           <div style={{ marginTop: 4 }}>{note}</div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
           <button className="btn" onClick={onCancel} disabled={pending}>
-            取消
+            {t("取消")}
           </button>
           <button
             className="btn"
@@ -512,7 +524,7 @@ function ConfirmDialog({
             disabled={pending}
             onClick={onConfirm}
           >
-            {pending ? "处理中…" : isRefund ? "确认冲正" : "确认充值"}
+            {pending ? t("处理中…") : isRefund ? t("确认冲正") : t("确认充值")}
           </button>
         </div>
       </div>

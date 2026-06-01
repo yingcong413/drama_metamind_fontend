@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useT } from "@/lib/i18n";
 
 export type TagKind = "req" | "opt" | "upload" | "audio";
 
@@ -21,5 +22,6 @@ const LABEL: Record<TagKind, string> = {
 };
 
 export function Tag({ kind, children }: Props) {
-  return <span className={`tag ${CLASS[kind]}`}>{children ?? LABEL[kind]}</span>;
+  const t = useT();
+  return <span className={`tag ${CLASS[kind]}`}>{children ?? t(LABEL[kind])}</span>;
 }

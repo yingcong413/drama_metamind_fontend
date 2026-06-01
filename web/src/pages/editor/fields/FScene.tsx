@@ -3,6 +3,7 @@ import { CloseIcon } from "@/components/icons";
 import { Placeholder } from "@/components/primitives/Placeholder";
 import { Upload } from "@/components/primitives/Upload";
 import { filenameFromUrl, isLoadableUrl } from "@/lib/format";
+import { t, useT } from "@/lib/i18n";
 import { uploadGlobalImage } from "@/lib/uploadGlobalImage";
 import type { GlobalLayer } from "@/types";
 
@@ -16,6 +17,7 @@ const isDataUrl = (s: string | null | undefined): boolean =>
   !!s && s.startsWith("data:");
 
 export function FScene({ value, set }: Props) {
+  const tr = useT();
   const img = value.scene_image ?? null;
   const replaceRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
@@ -35,7 +37,7 @@ export function FScene({ value, set }: Props) {
       set({ ...value, scene_image: url });
     } catch (e) {
       console.error("上传场景图失败", e);
-      alert("上传场景图失败:" + (e instanceof Error ? e.message : String(e)));
+      alert(t("上传场景图失败:") + (e instanceof Error ? e.message : String(e)));
     } finally {
       setPending(false);
     }
@@ -44,14 +46,14 @@ export function FScene({ value, set }: Props) {
   if (!img) {
     return (
       <Upload
-        label={pending ? "正在上传到 TOS…" : "上传场景参考图 · 如果是多视角场景，请把多个视角拼成一张图片再上传"}
+        label={pending ? tr("正在上传到 TOS…") : tr("上传场景参考图 · 如果是多视角场景，请把多个视角拼成一张图片再上传")}
         onSelect={applyFile}
       />
     );
   }
 
   const displayName = isDataUrl(img)
-    ? (fileName ? fileName : "本地上传(老数据 · base64)")
+    ? (fileName ? fileName : tr("本地上传(老数据 · base64)"))
     : filenameFromUrl(img);
   const canRender = isLoadableUrl(img) && !imgBroken;
 
@@ -107,7 +109,7 @@ export function FScene({ value, set }: Props) {
         }}
       />
       <button className="btn-ghost btn-sm" onClick={() => replaceRef.current?.click()}>
-        替换
+        {tr("替换")}
       </button>
       <button
         className="btn-ghost btn-sm"

@@ -1,5 +1,6 @@
 import { CopyIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { LayerChip } from "@/components/primitives/LayerChip";
+import { useT, useTf } from "@/lib/i18n";
 import { filledShotCount } from "@/lib/validators";
 import type { Character, Project, Shot } from "@/types";
 import { SubCard } from "./SubCard";
@@ -33,11 +34,13 @@ export function ShotView({
   addShot, duplicateShot, deleteShot, prevShot, isFirst, onJumpToField5,
 }: Props) {
   const projectChars = project.global.characters ?? [];
+  const t = useT();
+  const tf = useTf();
 
   return (
     <div className="main-content">
       <div className="module-head">
-        <span className="num-badge shot">分镜 {String(shotIndex + 1).padStart(2, "0")}</span>
+        <span className="num-badge shot">{t("分镜")} {String(shotIndex + 1).padStart(2, "0")}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <input
@@ -50,27 +53,27 @@ export function ShotView({
               onChange={(e) => setShot({ ...shot, name: e.target.value })}
             />
           </h1>
-          <div className="sub">一个连续动作单元 · 编辑此分镜将不影响其他分镜</div>
+          <div className="sub">{t("一个连续动作单元 · 编辑此分镜将不影响其他分镜")}</div>
           <div className="tags">
             <LayerChip layer="shot" />
             <span className="dim-2 mono" style={{ fontSize: 11 }}>
-              {filledShotCount(shot)} / 8 已填
+              {tf("{n} / 8 已填", { n: filledShotCount(shot) })}
             </span>
             <span className="dim-2 mono" style={{ fontSize: 11 }}>
-              出场 {(shot.cast_ids ?? []).length} 人
+              {tf("出场 {n} 人", { n: (shot.cast_ids ?? []).length })}
             </span>
           </div>
         </div>
         <div className="meta">
-          <button className="btn btn-sm" onClick={duplicateShot}><CopyIcon /> 复制</button>
-          <button className="btn btn-sm" onClick={addShot}><PlusIcon /> 添加</button>
+          <button className="btn btn-sm" onClick={duplicateShot}><CopyIcon /> {t("复制")}</button>
+          <button className="btn btn-sm" onClick={addShot}><PlusIcon /> {t("添加")}</button>
           <button
             className="btn btn-sm"
             onClick={deleteShot}
-            title="删除分镜"
+            title={t("删除分镜")}
             style={{ color: "oklch(72% .15 25)" }}
           >
-            <TrashIcon /> 删除
+            <TrashIcon /> {t("删除")}
           </button>
         </div>
       </div>

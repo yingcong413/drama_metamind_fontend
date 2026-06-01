@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronIcon } from "@/components/icons";
 import { Field } from "@/components/primitives/Field";
+import { useT, useTf } from "@/lib/i18n";
 import { sendSms } from "@/api/auth";
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
 }
 
 export function PhoneCodeForm({ phone, setPhone, code, setCode }: Props) {
+  const t = useT();
+  const tf = useTf();
   const [countdown, setCountdown] = useState(0);
   const phoneOk = /^1[3-9]\d{9}$/.test(phone);
 
@@ -32,7 +35,7 @@ export function PhoneCodeForm({ phone, setPhone, code, setCode }: Props) {
 
   return (
     <>
-      <Field title="手机号">
+      <Field title={t("手机号")}>
         <div className="phone-input">
           <button className="phone-cc" type="button">
             🇨🇳 +86 <ChevronIcon />
@@ -40,7 +43,7 @@ export function PhoneCodeForm({ phone, setPhone, code, setCode }: Props) {
           <input
             className="input input-lg"
             style={{ border: "none", paddingLeft: 14 }}
-            placeholder="请输入 11 位手机号"
+            placeholder={t("请输入 11 位手机号")}
             maxLength={11}
             value={phone}
             onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
@@ -49,12 +52,12 @@ export function PhoneCodeForm({ phone, setPhone, code, setCode }: Props) {
         </div>
       </Field>
 
-      <Field title="验证码">
+      <Field title={t("验证码")}>
         <div className="code-input">
           <input
             className="input input-lg"
             style={{ border: "none", letterSpacing: "0.4em", fontFamily: "var(--font-mono)" }}
-            placeholder="6 位短信验证码"
+            placeholder={t("6 位短信验证码")}
             maxLength={6}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
@@ -66,13 +69,13 @@ export function PhoneCodeForm({ phone, setPhone, code, setCode }: Props) {
             disabled={!phoneOk || countdown > 0}
             onClick={onSend}
           >
-            {countdown > 0 ? `${countdown}s 后重发` : "获取验证码"}
+            {countdown > 0 ? tf("{n}s 后重发", { n: countdown }) : t("获取验证码")}
           </button>
         </div>
         <div className="dim-2" style={{ fontSize: 11, marginTop: 6 }}>
           {phoneOk
-            ? `验证码将发送至 +86 ${phone.slice(0, 3)} **** ${phone.slice(7)}`
-            : "请输入有效的大陆手机号"}
+            ? tf("验证码将发送至 +86 {a} **** {b}", { a: phone.slice(0, 3), b: phone.slice(7) })
+            : t("请输入有效的大陆手机号")}
         </div>
       </Field>
     </>

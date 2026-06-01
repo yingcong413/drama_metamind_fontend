@@ -1,3 +1,5 @@
+import { useT } from "@/lib/i18n";
+
 export type LayerKind = "global" | "shot" | "output";
 
 interface Props {
@@ -11,11 +13,12 @@ const MAP: Record<LayerKind, { label: string; num: string }> = {
 };
 
 export function LayerChip({ layer }: Props) {
+  const t = useT();
   const m = MAP[layer];
   return (
     <span className={`layer-chip ${layer}`}>
       <span className="swatch" />
-      {m.label} · <span className="mono" style={{ opacity: 0.7 }}>{m.num}</span>
+      {t(m.label)} · <span className="mono" style={{ opacity: 0.7 }}>{m.num}</span>
     </span>
   );
 }

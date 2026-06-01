@@ -3,6 +3,8 @@ import { RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { router } from "@/router";
 import { useThemeStore } from "@/stores/theme";
+import { useLangStore } from "@/stores/lang";
+import { isRTL, t } from "@/lib/i18n";
 import { useAuthStore } from "@/stores/auth";
 import { USE_MOCK, USE_REAL_AUTH } from "@/api/client";
 import { loginPhone } from "@/api/auth";
@@ -22,6 +24,7 @@ const DEMO_PHONE = "13800138000";
 
 export function App() {
   const theme = useThemeStore((s) => s.theme);
+  const lang = useLangStore((s) => s.lang);
   const token = useAuthStore((s) => s.token);
   const setToken = useAuthStore((s) => s.setToken);
   const setUser = useAuthStore((s) => s.setUser);
@@ -32,6 +35,11 @@ export function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("lang", lang);
+    document.documentElement.setAttribute("dir", isRTL(lang) ? "rtl" : "ltr");
+  }, [lang]);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +80,7 @@ export function App() {
           fontFamily: "var(--font-mono)",
         }}
       >
-        正在初始化 demo 账户…
+        {t("正在初始化 demo 账户…")}
       </div>
     );
   }

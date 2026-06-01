@@ -12,6 +12,7 @@ import {
   type SeedanceTaskInfo,
 } from "@/api/seedance";
 import { createTask, patchTask } from "@/api/tasks";
+import { t, useT, useTf } from "@/lib/i18n";
 import { buildPromptText } from "@/lib/naturalLanguage";
 import { buildPromptSnapshot } from "@/lib/promptSnapshot";
 import { saveGenerationResult } from "@/lib/generationResult";
@@ -29,6 +30,8 @@ interface Props {
 type Phase = "preview" | "submitting" | "polling" | "success" | "failed";
 
 export function GenerateRequestModal({ project, characters, onClose, onConfirm }: Props) {
+  const tr = useT();
+  const tf = useTf();
   const payload: SeedanceRequest = useMemo(
     () => buildSeedancePayload(project, characters),
     [project, characters],
@@ -116,7 +119,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
       // v0.9.5 §10.8.3:余额不足(402)→ 不提交上游,直接报错引导充值
       const status = (e as { status?: number })?.status;
       if (status === 402) {
-        const msg = e instanceof Error && e.message ? e.message : "积分不足，请先充值后再生成";
+        const msg = e instanceof Error && e.message ? e.message : t("积分不足，请先充值后再生成");
         console.warn("[Tasks] 余额不足,已拦截提交:", msg);
         console.groupEnd();
         setError(msg);
@@ -179,7 +182,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
               pollRef.current = null;
             }
           } else if (term === "failed") {
-            const reason = next.fail_reason || next.error?.message || "生成失败";
+            const reason = next.fail_reason || next.error?.message || t("生成失败");
             setError(reason);
             setErrorCode(next.error?.code ?? null);
             setPhase("failed");
@@ -258,17 +261,17 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
         >
           <div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>
-              {isPreview ? "生成视频 · 请求预览" : "生成视频 · 任务状态"}
+              {isPreview ? tr("生成视频 · 请求预览") : tr("生成视频 · 任务状态")}
             </div>
             <div className="dim" style={{ fontSize: 12, marginTop: 2 }}>
               {isPreview
-                ? `POST ${getEndpointHint()}/video/generations · ${payloadJson.length} 字符`
+                ? tf("POST {url}/video/generations · {n} 字符", { url: getEndpointHint(), n: payloadJson.length })
                 : taskId
                   ? `task_id: ${taskId}`
-                  : "提交中…"}
+                  : tr("提交中…")}
             </div>
           </div>
-          <button className="btn-ghost btn-icon" onClick={handleClose} title="关闭">
+          <button className="btn-ghost btn-icon" onClick={handleClose} title={tr("关闭")}>
             <CloseIcon />
           </button>
         </div>
@@ -284,8 +287,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
             lineHeight: 1.6,
           }}
         >
-          测试期所有人共用 Demo 账号,生成会进上游 GPU 队列,通常 <strong style={{ color: "var(--text)" }}>1–3 分钟</strong>。
-          多人同时使用会更久;实际生成时长可能因模型能力略低于设定值。
+          {tr("测试期所有人共用 Demo 账号,生成会进上游 GPU 队列,通常")} <strong style={{ color: "var(--text)" }}>{tr("1–3 分钟")}</strong>{tr("。多人同时使用会更久;实际生成时长可能因模型能力略低于设定值。")}
         </div>
 
         <div style={{ flex: 1, padding: 18, overflow: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -299,10 +301,10 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                 }}
               >
                 <TabBtn active={previewTab === "json"} onClick={() => setPreviewTab("json")}>
-                  完整 JSON
+                  {tr("完整 JSON")}
                 </TabBtn>
                 <TabBtn active={previewTab === "prompt"} onClick={() => setPreviewTab("prompt")}>
-                  Prompt 文本 · {promptText.length} 字
+                  {tf("Prompt 文本 · {n} 字", { n: promptText.length })}
                 </TabBtn>
               </div>
               <textarea
@@ -327,7 +329,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                 }}
               />
               <div className="dim-2 mono" style={{ fontSize: 11 }}>
-                Prompt 文本与「保存」弹窗共用同一份 <code>buildPromptText()</code>,两边永远一致。
+                {tr("Prompt 文本与「保存」弹窗共用同一份")} <code>buildPromptText()</code>{tr(",两边永远一致。")}
               </div>
             </>
           ) : (
@@ -350,7 +352,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                     fontSize: 13,
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>视频已生成 ✓</div>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>{tr("视频已生成 ✓")}</div>
                   <div
                     style={{ fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
                   >
@@ -377,7 +379,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
 
               <details>
                 <summary className="dim" style={{ cursor: "pointer", fontSize: 12 }}>
-                  原始响应 / 调试信息
+                  {tr("原始响应 / 调试信息")}
                 </summary>
                 <pre
                   style={{
@@ -408,14 +410,14 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
         >
           <div className="dim-2 mono" style={{ fontSize: 11 }}>
             {isPreview
-              ? "校验通过后点「确认生成」走真实接口"
+              ? tr("校验通过后点「确认生成」走真实接口")
               : phase === "polling"
-                ? "正在轮询任务状态(每 4s)"
+                ? tr("正在轮询任务状态(每 4s)")
                 : phase === "submitting"
-                  ? "提交中…"
+                  ? tr("提交中…")
                   : phase === "success"
-                    ? "完成"
-                    : "失败"}
+                    ? tr("完成")
+                    : tr("失败")}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {isPreview && (
@@ -425,23 +427,23 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
               >
                 <CopyIcon />{" "}
                 {copied
-                  ? "已复制"
+                  ? tr("已复制")
                   : previewTab === "json"
-                    ? "复制 JSON"
-                    : "复制 Prompt"}
+                    ? tr("复制 JSON")
+                    : tr("复制 Prompt")}
               </button>
             )}
             {(phase === "success" && videoUrl) && (
               <button className="btn btn-sm" onClick={() => copy(videoUrl)}>
-                <CopyIcon /> {copied ? "已复制" : "复制视频 URL"}
+                <CopyIcon /> {copied ? tr("已复制") : tr("复制视频 URL")}
               </button>
             )}
             <button className="btn btn-sm" onClick={handleClose}>
-              {phase === "success" || phase === "failed" ? "关闭" : "取消"}
+              {phase === "success" || phase === "failed" ? tr("关闭") : tr("取消")}
             </button>
             {isPreview && (
               <button className="btn-primary btn btn-sm" onClick={startSubmit}>
-                <SparkleIcon /> 确认生成
+                <SparkleIcon /> {tr("确认生成")}
               </button>
             )}
             {phase === "success" && (
@@ -452,12 +454,12 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                   handleClose();
                 }}
               >
-                查看结果页
+                {tr("查看结果页")}
               </button>
             )}
             {phase === "failed" && (
               <button className="btn-primary btn btn-sm" onClick={startSubmit}>
-                重试
+                {tr("重试")}
               </button>
             )}
           </div>
@@ -521,6 +523,8 @@ function SubmittedRequestPanel({
 }) {
   const [bodyTab, setBodyTab] = useState<"json" | "prompt">("json");
   const [open, setOpen] = useState(false);
+  const tr = useT();
+  const tf = useTf();
 
   return (
     <div
@@ -546,15 +550,15 @@ function SubmittedRequestPanel({
           gap: 10,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 500 }}>本次提交</span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>{tr("本次提交")}</span>
         <span
           className="dim-2 mono"
           style={{ fontSize: 11, flex: 1 }}
         >
-          {endpoint} · {payloadJson.length} 字符
+          {tf("{url} · {n} 字符", { url: endpoint, n: payloadJson.length })}
         </span>
         <span className="dim-2" style={{ fontSize: 11 }}>
-          {open ? "▾ 收起" : "▸ 展开"}
+          {open ? tr("▾ 收起") : tr("▸ 展开")}
         </span>
       </button>
 
@@ -580,11 +584,11 @@ function SubmittedRequestPanel({
           >
             <span className="dim-2">Endpoint</span>
             <span style={{ wordBreak: "break-all" }}>{endpoint}</span>
-            <span className="dim-2">本地 task_id</span>
-            <span>{localTaskId || <em className="dim-2">(后端未登记)</em>}</span>
-            <span className="dim-2">上游 task_id</span>
-            <span>{upstreamTaskId || <em className="dim-2">(尚未提交)</em>}</span>
-            <span className="dim-2">提交时间</span>
+            <span className="dim-2">{tr("本地 task_id")}</span>
+            <span>{localTaskId || <em className="dim-2">{tr("(后端未登记)")}</em>}</span>
+            <span className="dim-2">{tr("上游 task_id")}</span>
+            <span>{upstreamTaskId || <em className="dim-2">{tr("(尚未提交)")}</em>}</span>
+            <span className="dim-2">{tr("提交时间")}</span>
             <span>
               {submittedAt
                 ? new Date(submittedAt).toLocaleString()
@@ -632,7 +636,7 @@ function SubmittedRequestPanel({
                 fontWeight: bodyTab === "prompt" ? 600 : 400,
               }}
             >
-              Prompt · {promptText.length} 字
+              {tf("Prompt · {n} 字", { n: promptText.length })}
             </button>
             <button
               onClick={() => copyToClipboard(bodyTab === "json" ? payloadJson : promptText)}
@@ -646,9 +650,9 @@ function SubmittedRequestPanel({
                 cursor: "pointer",
                 marginLeft: 4,
               }}
-              title={`复制 ${bodyTab === "json" ? "JSON" : "Prompt"}`}
+              title={tf("复制 {what}", { what: bodyTab === "json" ? "JSON" : "Prompt" })}
             >
-              {copied ? "✓ 已复制" : "复制"}
+              {copied ? tr("✓ 已复制") : tr("复制")}
             </button>
           </div>
 
@@ -681,16 +685,16 @@ function SubmittedRequestPanel({
 function translateStatus(s: string | undefined): string {
   const k = (s ?? "").toUpperCase();
   switch (k) {
-    case "PENDING":      return "排队中(等待 GPU)";
-    case "QUEUED":       return "排队中(等待 GPU)";
-    case "IN_PROGRESS":  return "生成中";
-    case "RUNNING":      return "生成中";
+    case "PENDING":      return t("排队中(等待 GPU)");
+    case "QUEUED":       return t("排队中(等待 GPU)");
+    case "IN_PROGRESS":  return t("生成中");
+    case "RUNNING":      return t("生成中");
     case "SUCCESS":
-    case "SUCCEEDED":    return "完成";
+    case "SUCCEEDED":    return t("完成");
     case "FAILED":
-    case "FAILURE":      return "失败";
-    case "":             return "排队中";
-    default:             return s ?? "排队中";
+    case "FAILURE":      return t("失败");
+    case "":             return t("排队中");
+    default:             return s ?? t("排队中");
   }
 }
 
@@ -709,15 +713,16 @@ function StatusPanel({
   errorCode?: string | null;
   elapsedSec?: number;
 }) {
+  const tr = useT();
   const label =
     phase === "submitting"
-      ? "正在提交任务给生成服务…"
+      ? tr("正在提交任务给生成服务…")
       : phase === "polling"
         ? translateStatus(status)
         : phase === "success"
-          ? "生成成功"
+          ? tr("生成成功")
           : phase === "failed"
-            ? "失败"
+            ? tr("失败")
             : "";
   const ok = phase === "success";
   const bad = phase === "failed";
@@ -757,13 +762,13 @@ function StatusPanel({
       {/* 进行中:显示已等待 + 长等待友好提示 */}
       {(phase === "submitting" || phase === "polling") && elapsedSec > 0 && (
         <div className="dim-2" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.6 }}>
-          已等待 <span className="mono" style={{ color: "var(--text)" }}>{formatElapsed(elapsedSec)}</span>
+          {tr("已等待")} <span className="mono" style={{ color: "var(--text)" }}>{formatElapsed(elapsedSec)}</span>
           {progress === 0 && elapsedSec > 10 && (
             <span>
               {" · "}
               {phase === "submitting"
-                ? "如果一直停在这里超过 60 秒,可能是上游繁忙或多人同时使用,我们会自动超时并提示"
-                : "上游 GPU 排队中,通常需要 1-3 分钟。多人同时使用会更久"}
+                ? tr("如果一直停在这里超过 60 秒,可能是上游繁忙或多人同时使用,我们会自动超时并提示")
+                : tr("上游 GPU 排队中,通常需要 1-3 分钟。多人同时使用会更久")}
             </span>
           )}
         </div>
@@ -784,7 +789,7 @@ function StatusPanel({
         >
           {errorCode && (
             <div className="mono" style={{ fontSize: 11, opacity: 0.85, marginBottom: 4 }}>
-              错误码:{errorCode}
+              {tr("错误码:")}{errorCode}
             </div>
           )}
           {error}
@@ -802,8 +807,8 @@ function getEndpointHint(): string {
 }
 
 function formatElapsed(sec: number): string {
-  if (sec < 60) return `${sec} 秒`;
+  if (sec < 60) return `${sec} ${t("秒")}`;
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return `${m} 分 ${String(s).padStart(2, "0")} 秒`;
+  return `${m} ${t("分")} ${String(s).padStart(2, "0")} ${t("秒")}`;
 }

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { CloseIcon, MicIcon, PlayIcon } from "@/components/icons";
 import { Tag } from "@/components/primitives/Tag";
+import { t, useT } from "@/lib/i18n";
 import { uploadGlobalAudio } from "@/lib/uploadGlobalImage";
 import type { Character, Shot, SpeechBlock } from "@/types";
 
@@ -30,6 +31,7 @@ export function FSpeech({
   accentVar = "--layer-shot",
   shotCharOptions,
 }: Props) {
+  const tr = useT();
   const v: SpeechBlock = value[kind] ?? { char_id: null, text: "", audio_url: null };
   const update = (patch: Partial<SpeechBlock>) => set({ ...value, [kind]: { ...v, ...patch } });
   const ids = shotCharOptions ?? [];
@@ -55,7 +57,7 @@ export function FSpeech({
       update({ audio_url: url });
     } catch (err) {
       console.error("上传台词/独白/旁白音频失败", err);
-      alert("上传音频失败:" + (err instanceof Error ? err.message : String(err)));
+      alert(t("上传音频失败:") + (err instanceof Error ? err.message : String(err)));
     } finally {
       setPending(false);
     }
@@ -72,11 +74,11 @@ export function FSpeech({
               fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em",
             }}
           >
-            角色
+            {tr("角色")}
           </div>
           {options.length === 0 ? (
             <div className="dim-2" style={{ fontSize: 12, flex: 1 }}>
-              请先在本分镜顶部「出场角色」步骤选定角色
+              {tr("请先在本分镜顶部「出场角色」步骤选定角色")}
             </div>
           ) : (
             <select
@@ -85,7 +87,7 @@ export function FSpeech({
               value={v.char_id ?? ""}
               onChange={(e) => update({ char_id: e.target.value || null })}
             >
-              <option value="">— 选择角色 —</option>
+              <option value="">{tr("— 选择角色 —")}</option>
               {options.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}（{c.role}）</option>
               ))}
@@ -103,12 +105,12 @@ export function FSpeech({
             paddingTop: 8,
           }}
         >
-          内容
+          {tr("内容")}
         </div>
         <textarea
           className="textarea"
           style={{ flex: 1, minHeight: 60 }}
-          placeholder={PLACEHOLDERS[kind]}
+          placeholder={tr(PLACEHOLDERS[kind])}
           value={v.text ?? ""}
           onChange={(e) => update({ text: e.target.value })}
         />
@@ -123,7 +125,7 @@ export function FSpeech({
             fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em",
           }}
         >
-          音频
+          {tr("音频")}
         </div>
         <input
           ref={inputRef}
@@ -152,7 +154,7 @@ export function FSpeech({
             <div style={{ flex: 1, fontSize: 12, fontFamily: "var(--font-mono)" }}>{v.audio_url}</div>
             <span className="dim-2 mono" style={{ fontSize: 10 }}>00:03</span>
             <button className="btn-ghost btn-sm" onClick={pickFile} disabled={pending}>
-              {pending ? "上传中…" : "替换"}
+              {pending ? tr("上传中…") : tr("替换")}
             </button>
             <button
               className="btn-ghost btn-sm"
@@ -170,8 +172,8 @@ export function FSpeech({
             disabled={pending}
           >
             <MicIcon />{" "}
-            {pending ? "正在上传到 TOS…" : "上传或录制音频"}{" "}
-            <Tag kind="audio">需音频</Tag>
+            {pending ? tr("正在上传到 TOS…") : tr("上传或录制音频")}{" "}
+            <Tag kind="audio">{tr("需音频")}</Tag>
           </button>
         )}
       </div>

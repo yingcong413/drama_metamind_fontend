@@ -1,4 +1,5 @@
 import { StrengthSlider } from "@/components/primitives/StrengthSlider";
+import { useT } from "@/lib/i18n";
 import type { Shot } from "@/types";
 
 interface Props {
@@ -13,6 +14,7 @@ const STEPS = [
 ] as const;
 
 export function FAction({ value, set }: Props) {
+  const t = useT();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="field-row-3">
@@ -35,12 +37,12 @@ export function FAction({ value, set }: Props) {
             >
               {i + 1}
             </span>
-            {step.label}
+            {t(step.label)}
           </div>
           <textarea
             className="textarea"
             style={{ minHeight: 80 }}
-            placeholder={step.ph}
+            placeholder={t(step.ph)}
             value={value.action?.[step.k] ?? ""}
             onChange={(e) =>
               set({ ...value, action: { ...value.action, [step.k]: e.target.value } })
@@ -50,7 +52,7 @@ export function FAction({ value, set }: Props) {
       ))}
       </div>
       <StrengthSlider
-        label="动作强度"
+        label={t("动作强度")}
         value={value.action_strength}
         onChange={(v) => set({ ...value, action_strength: v })}
       />

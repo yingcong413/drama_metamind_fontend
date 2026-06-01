@@ -5,6 +5,7 @@
 //   · TOP 提交人(按消费倒序前 5):点击姓名→把 cast_user_id 套到筛选器
 
 import { formatYuan } from "@/lib/format";
+import { useT, useTf } from "@/lib/i18n";
 import type { TaskStats } from "@/api/tasks";
 
 interface Props {
@@ -20,6 +21,8 @@ export function TasksStatsBar({
   currentSubmitter,
   onClearSubmitter,
 }: Props) {
+  const t = useT();
+  const tf = useTf();
   const top = stats.top_submitters || [];
 
   return (
@@ -45,14 +48,14 @@ export function TasksStatsBar({
         }}
       >
         <Metric
-          label="组织消耗"
+          label={t("组织消耗")}
           value={`¥ ${formatYuan(stats.total_cost_cents)}`}
           highlight
         />
-        <Metric label="提交人" value={`${stats.active_members} 人`} />
-        <Metric label="任务总数" value={String(stats.total_count)} />
+        <Metric label={t("提交人")} value={tf("{n} 人", { n: stats.active_members })} />
+        <Metric label={t("任务总数")} value={String(stats.total_count)} />
         <Metric
-          label="状态分布"
+          label={t("状态分布")}
           value={
             <span
               className="mono"
@@ -96,7 +99,7 @@ export function TasksStatsBar({
               textTransform: "uppercase",
             }}
           >
-            TOP 提交人
+            {t("TOP 提交人")}
           </div>
           {top.map((s) => {
             const active = currentSubmitter === s.user_id;
@@ -104,7 +107,7 @@ export function TasksStatsBar({
               <button
                 key={s.user_id}
                 onClick={() => onPickSubmitter(s.user_id)}
-                title={`本时间窗共 ${s.count} 条,消耗 ¥${formatYuan(s.cost_cents)}`}
+                title={tf("本时间窗共 {count} 条,消耗 ¥{cost}", { count: s.count, cost: formatYuan(s.cost_cents) })}
                 style={{
                   padding: "4px 10px",
                   fontSize: 12,
@@ -139,7 +142,7 @@ export function TasksStatsBar({
               onClick={onClearSubmitter}
               style={{ fontSize: 11, padding: "3px 8px" }}
             >
-              × 取消筛选
+              {t("× 取消筛选")}
             </button>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useT, useTf } from "@/lib/i18n";
 import { AppTopBar } from "@/components/layout/AppTopBar";
 import { PlusIcon } from "@/components/icons";
 import { createProject, listProjects } from "@/api/projects";
@@ -48,7 +49,7 @@ export function DashboardPage() {
     },
     onError: (e) => {
       console.error("新建项目失败", e);
-      alert(`新建失败：${(e as Error).message}`);
+      alert(`${t("新建失败")}：${(e as Error).message}`);
     },
   });
 
@@ -57,22 +58,25 @@ export function DashboardPage() {
     setDialogOpen(true);
   };
 
+  const t = useT();
+  const tf = useTf();
+
   return (
     <>
       <AppTopBar
-        crumbs={[{ label: "项目" }]}
+        crumbs={[{ label: t("项目") }]}
         actions={
           <button className="btn-primary btn btn-sm" onClick={onCreate}>
-            <PlusIcon /> 新建
+            <PlusIcon /> {t("新建")}
           </button>
         }
       />
       <div className="dash" data-screen-label="Dashboard">
         <div className="dash-header">
           <div>
-            <h1>我的短剧项目</h1>
+            <h1>{t("我的短剧项目")}</h1>
             <div className="dim">
-              {isLoading ? "加载中…" : `共 ${counts.all} 个项目 · 上次同步刚刚`}
+              {isLoading ? t("加载中…") : tf("共 {n} 个项目 · 上次同步刚刚", { n: counts.all })}
             </div>
           </div>
           <DashboardToolbar
@@ -87,7 +91,7 @@ export function DashboardPage() {
 
         {isError && (
           <div className="dim" style={{ padding: 24 }}>
-            加载失败：{(error as Error).message}
+            {t("加载失败")}：{(error as Error).message}
           </div>
         )}
 

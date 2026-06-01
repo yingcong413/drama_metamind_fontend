@@ -5,12 +5,14 @@ import { Avatar } from "@/components/primitives/Avatar";
 import { EditIcon, KeyIcon } from "@/components/icons";
 import { updateUser } from "@/api/auth";
 import { useAuthStore } from "@/stores/auth";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   onChangePassword: () => void;
 }
 
 export function AccountInfoCard({ onChangePassword }: Props) {
+  const t = useT();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -54,7 +56,7 @@ export function AccountInfoCard({ onChangePassword }: Props) {
           fontSize: 13,
         }}
       >
-        未登录
+        {t("未登录")}
       </section>
     );
   }
@@ -73,7 +75,7 @@ export function AccountInfoCard({ onChangePassword }: Props) {
       }}
     >
       <div style={{ flexShrink: 0 }}>
-        <Avatar name={user.name || "你"} size="xl" />
+        <Avatar name={user.name || t("你")} size="xl" />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -101,10 +103,10 @@ export function AccountInfoCard({ onChangePassword }: Props) {
                 disabled={!draft.trim() || draft === user.name || save.isPending}
                 onClick={() => save.mutate(draft.trim())}
               >
-                {save.isPending ? "保存中…" : "保存"}
+                {save.isPending ? t("保存中…") : t("保存")}
               </button>
               <button className="btn btn-sm" onClick={cancelEdit}>
-                取消
+                {t("取消")}
               </button>
             </>
           ) : (
@@ -112,7 +114,7 @@ export function AccountInfoCard({ onChangePassword }: Props) {
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{user.name}</h2>
               <button
                 className="btn-ghost btn-sm"
-                title="修改昵称"
+                title={t("修改昵称")}
                 onClick={() => setEditingName(true)}
                 style={{ padding: 4 }}
               >
@@ -133,9 +135,9 @@ export function AccountInfoCard({ onChangePassword }: Props) {
             color: "var(--text-secondary)",
           }}
         >
-          <InfoItem label="手机号" value={user.phone || "未绑定"} mono />
-          <InfoItem label="用户 ID" value={user.id} mono />
-          <InfoItem label="登录方式" value="手机验证码" />
+          <InfoItem label={t("手机号")} value={user.phone || t("未绑定")} mono />
+          <InfoItem label={t("用户 ID")} value={user.id} mono />
+          <InfoItem label={t("登录方式")} value={t("手机验证码")} />
         </div>
       </div>
 
@@ -143,26 +145,26 @@ export function AccountInfoCard({ onChangePassword }: Props) {
         {showUpgradeCta && (
           <button
             className="btn btn-sm btn-primary"
-            title="升级为企业账户:邀请同事、共享素材库、统一发票"
+            title={t("升级为企业账户:邀请同事、共享素材库、统一发票")}
             onClick={() => navigate("/org")}
           >
-            ⇪ 升级为企业账户
+            {t("⇪ 升级为企业账户")}
           </button>
         )}
         <button className="btn btn-sm" onClick={onChangePassword}>
-          <KeyIcon /> 修改密码
+          <KeyIcon /> {t("修改密码")}
         </button>
         <button
           className="btn-ghost btn-sm"
           style={{ color: "oklch(72% .15 25)" }}
           onClick={() => {
-            if (confirm("确定要退出登录吗?")) {
+            if (confirm(t("确定要退出登录吗?"))) {
               logout();
               window.location.href = "/login";
             }
           }}
         >
-          退出登录
+          {t("退出登录")}
         </button>
       </div>
     </section>

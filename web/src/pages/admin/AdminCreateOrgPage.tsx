@@ -17,6 +17,7 @@ import {
   type CreateAdminOrgResponse,
 } from "@/api/admin";
 import { formatYuan } from "@/lib/format";
+import { useT, useTf } from "@/lib/i18n";
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
 
@@ -29,6 +30,8 @@ export function AdminCreateOrgPage() {
 }
 
 function CreateOrgBody() {
+  const t = useT();
+  const tf = useTf();
   const navigate = useNavigate();
 
   // ── 表单字段 ──
@@ -86,7 +89,7 @@ function CreateOrgBody() {
       setShowConfirm(false);
     },
     onError: (e) => {
-      alert(`创建失败:${(e as Error).message}`);
+      alert(tf("创建失败:{msg}", { msg: (e as Error).message }));
       setShowConfirm(false);
     },
   });
@@ -107,7 +110,7 @@ function CreateOrgBody() {
 
   return (
     <>
-      <AppTopBar crumbs={[{ label: "平台管理" }, { label: "替人开企业" }]} />
+      <AppTopBar crumbs={[{ label: t("平台管理") }, { label: t("替人开企业") }]} />
       <div
         style={{
           maxWidth: 720,
@@ -122,12 +125,12 @@ function CreateOrgBody() {
           <>
             <header>
               <h1 style={{ margin: 0, fontSize: 22 }}>
-                替客户开通企业账户
+                {t("替客户开通企业账户")}
               </h1>
               <div className="dim-2" style={{ fontSize: 13, marginTop: 6, lineHeight: 1.6 }}>
-                填写客户手机号 + 公司名一次性建好。可顺手做首笔线下充值。
+                {t("填写客户手机号 + 公司名一次性建好。可顺手做首笔线下充值。")}
                 <br />
-                创建完成后,客户用该手机号在登录页发送验证码即可登录(无需密码)。
+                {t("创建完成后,客户用该手机号在登录页发送验证码即可登录(无需密码)。")}
               </div>
             </header>
 
@@ -143,9 +146,9 @@ function CreateOrgBody() {
               }}
             >
               <Field
-                label="客户手机号"
-                hint="11 位中国大陆手机号"
-                error={phone && !phoneOk ? "格式不对" : ""}
+                label={t("客户手机号")}
+                hint={t("11 位中国大陆手机号")}
+                error={phone && !phoneOk ? t("格式不对") : ""}
               >
                 <input
                   className="input"
@@ -158,13 +161,13 @@ function CreateOrgBody() {
               </Field>
 
               <Field
-                label="公司 / 组织名称"
-                hint="2-30 字,后续 Owner 可在 /org 页修改"
-                error={orgName && !orgNameOk ? "公司名 2-30 字" : ""}
+                label={t("公司 / 组织名称")}
+                hint={t("2-30 字,后续 Owner 可在 /org 页修改")}
+                error={orgName && !orgNameOk ? t("公司名 2-30 字") : ""}
               >
                 <input
                   className="input"
-                  placeholder="云山影视有限公司"
+                  placeholder={t("云山影视有限公司")}
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
                   maxLength={30}
@@ -172,13 +175,13 @@ function CreateOrgBody() {
               </Field>
 
               <Field
-                label="Owner 姓名(可选)"
-                hint="留空 = 用「用户XXXX」(取手机号后 4 位)"
-                error={ownerName && !ownerNameOk ? "姓名不超过 30 字" : ""}
+                label={t("Owner 姓名(可选)")}
+                hint={t("留空 = 用「用户XXXX」(取手机号后 4 位)")}
+                error={ownerName && !ownerNameOk ? t("姓名不超过 30 字") : ""}
               >
                 <input
                   className="input"
-                  placeholder="张小明"
+                  placeholder={t("张小明")}
                   value={ownerName}
                   onChange={(e) => setOwnerName(e.target.value)}
                   maxLength={30}
@@ -186,15 +189,15 @@ function CreateOrgBody() {
               </Field>
 
               <Field
-                label="初始密码(可选)"
-                hint="留空 = 仅可用 SMS 验证码登录。SMS 暂不通时设个密码,客户用手机号 + 密码登录。6-64 位。"
-                error={initialPassword && !passwordOk ? "密码 6-64 位" : ""}
+                label={t("初始密码(可选)")}
+                hint={t("留空 = 仅可用 SMS 验证码登录。SMS 暂不通时设个密码,客户用手机号 + 密码登录。6-64 位。")}
+                error={initialPassword && !passwordOk ? t("密码 6-64 位") : ""}
               >
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
                     className="input"
                     type="text"
-                    placeholder="留空 / 或自定义"
+                    placeholder={t("留空 / 或自定义")}
                     value={initialPassword}
                     onChange={(e) => setInitialPassword(e.target.value)}
                     maxLength={64}
@@ -204,9 +207,9 @@ function CreateOrgBody() {
                     type="button"
                     className="btn btn-sm"
                     onClick={genPassword}
-                    title="生成 8 位随机密码"
+                    title={t("生成 8 位随机密码")}
                   >
-                    生成
+                    {t("生成")}
                   </button>
                 </div>
               </Field>
@@ -214,15 +217,15 @@ function CreateOrgBody() {
               <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
 
               <Field
-                label="首笔充值金额(元,可选)"
-                hint="留空或 0 = 不充;>0 会生成一笔 admin_manual 流水,可在「手动充值」页查看"
+                label={t("首笔充值金额(元,可选)")}
+                hint={t("留空或 0 = 不充;>0 会生成一笔 admin_manual 流水,可在「手动充值」页查看")}
               >
                 <input
                   className="input"
                   type="number"
                   step="0.01"
                   min="0"
-                  placeholder="例如 5000"
+                  placeholder={t("例如 5000")}
                   value={initialYuan}
                   onChange={(e) => setInitialYuan(e.target.value)}
                 />
@@ -230,14 +233,14 @@ function CreateOrgBody() {
 
               {initialCents > 0 && (
                 <Field
-                  label="充值备注(必填)"
-                  hint="对账依据,2-200 字。例:线下银行转账 / 微信收款"
-                  error={note && !noteOk ? "备注 2-200 字" : ""}
+                  label={t("充值备注(必填)")}
+                  hint={t("对账依据,2-200 字。例:线下银行转账 / 微信收款")}
+                  error={note && !noteOk ? t("备注 2-200 字") : ""}
                 >
                   <textarea
                     className="input"
                     rows={2}
-                    placeholder="例:已收到客户银行转账 ¥5000,凭证 No.20260529-001"
+                    placeholder={t("例:已收到客户银行转账 ¥5000,凭证 No.20260529-001")}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     maxLength={200}
@@ -258,14 +261,14 @@ function CreateOrgBody() {
                   onClick={() => navigate("/admin/recharge")}
                   disabled={create.isPending}
                 >
-                  取消
+                  {t("取消")}
                 </button>
                 <button
                   className="btn btn-primary"
                   disabled={!canSubmit || create.isPending}
                   onClick={() => setShowConfirm(true)}
                 >
-                  {create.isPending ? "创建中…" : "创建企业账户"}
+                  {create.isPending ? t("创建中…") : t("创建企业账户")}
                 </button>
               </div>
             </div>
@@ -280,23 +283,23 @@ function CreateOrgBody() {
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: 480 }}
             >
-              <h3 style={{ marginTop: 0 }}>确认创建企业账户?</h3>
+              <h3 style={{ marginTop: 0 }}>{t("确认创建企业账户?")}</h3>
               <ul style={{ fontSize: 14, lineHeight: 1.8, paddingLeft: 20 }}>
-                <li>手机号 <strong>{phone}</strong></li>
-                <li>公司 <strong>{orgName.trim()}</strong></li>
-                {ownerName.trim() && <li>Owner 姓名 <strong>{ownerName.trim()}</strong></li>}
+                <li>{t("手机号")} <strong>{phone}</strong></li>
+                <li>{t("公司")} <strong>{orgName.trim()}</strong></li>
+                {ownerName.trim() && <li>{t("Owner 姓名")} <strong>{ownerName.trim()}</strong></li>}
                 {initialCents > 0 && (
                   <li>
-                    首笔充值 <strong>¥{formatYuan(initialCents)}</strong>
+                    {t("首笔充值")} <strong>¥{formatYuan(initialCents)}</strong>
                     <br />
                     <span className="dim-2" style={{ fontSize: 12 }}>
-                      备注:{note.trim()}
+                      {tf("备注:{note}", { note: note.trim() })}
                     </span>
                   </li>
                 )}
               </ul>
               <div className="dim-2" style={{ fontSize: 12, marginTop: 10 }}>
-                若该手机号已是另一家企业 Owner / 其它组织 Member,创建会失败。
+                {t("若该手机号已是另一家企业 Owner / 其它组织 Member,创建会失败。")}
               </div>
               <div
                 style={{
@@ -311,14 +314,14 @@ function CreateOrgBody() {
                   onClick={() => setShowConfirm(false)}
                   disabled={create.isPending}
                 >
-                  返回修改
+                  {t("返回修改")}
                 </button>
                 <button
                   className="btn btn-primary"
                   onClick={() => create.mutate()}
                   disabled={create.isPending}
                 >
-                  {create.isPending ? "提交中…" : "确认创建"}
+                  {create.isPending ? t("提交中…") : t("确认创建")}
                 </button>
               </div>
             </div>
@@ -377,6 +380,8 @@ function ResultCard({
   plainPassword: string | null;
   onReset: () => void;
 }) {
+  const t = useT();
+  const tf = useTf();
   const navigate = useNavigate();
   const { user, organization, account, initial_recharge } = result;
   const copy = (text: string) => {
@@ -415,24 +420,24 @@ function ResultCard({
           ✓
         </div>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>企业账户创建成功</h2>
+          <h2 style={{ margin: 0, fontSize: 20 }}>{t("企业账户创建成功")}</h2>
           <div className="dim-2" style={{ fontSize: 12, marginTop: 4 }}>
             {user.is_new
-              ? "已新建用户 + 企业组织 + 余额账户"
-              : "该手机号已存在用户,组织已升级为企业账户"}
+              ? t("已新建用户 + 企业组织 + 余额账户")
+              : t("该手机号已存在用户,组织已升级为企业账户")}
           </div>
         </div>
       </div>
 
-      <KV label="企业名称" value={organization.name} />
-      <KV label="企业 ID" value={organization.id} onCopy={() => copy(organization.id)} mono />
-      <KV label="席位上限" value={`${organization.seat_limit} 席`} />
-      <KV label="Owner 姓名" value={user.name} />
-      <KV label="Owner 手机号" value={user.phone ?? ""} onCopy={() => user.phone && copy(user.phone)} mono />
-      <KV label="Owner 用户 ID" value={user.id} onCopy={() => copy(user.id)} mono />
+      <KV label={t("企业名称")} value={organization.name} />
+      <KV label={t("企业 ID")} value={organization.id} onCopy={() => copy(organization.id)} mono />
+      <KV label={t("席位上限")} value={tf("{n} 席", { n: organization.seat_limit })} />
+      <KV label={t("Owner 姓名")} value={user.name} />
+      <KV label={t("Owner 手机号")} value={user.phone ?? ""} onCopy={() => user.phone && copy(user.phone)} mono />
+      <KV label={t("Owner 用户 ID")} value={user.id} onCopy={() => copy(user.id)} mono />
       {user.password_set && plainPassword && (
         <KV
-          label="初始密码"
+          label={t("初始密码")}
           value={plainPassword}
           onCopy={() => copy(plainPassword)}
           mono
@@ -440,14 +445,14 @@ function ResultCard({
         />
       )}
       <KV
-        label="当前余额"
+        label={t("当前余额")}
         value={`¥${formatYuan(account.balance_cents)}`}
         emphasis
       />
       {initial_recharge && (
         <KV
-          label="首笔充值"
-          value={`¥${formatYuan(initial_recharge.amount_cents)} (流水 ${initial_recharge.id})`}
+          label={t("首笔充值")}
+          value={tf("¥{amt} (流水 {id})", { amt: formatYuan(initial_recharge.amount_cents), id: initial_recharge.id })}
           mono
         />
       )}
@@ -463,25 +468,25 @@ function ResultCard({
           lineHeight: 1.7,
         }}
       >
-        <strong>转告客户:</strong>
+        <strong>{t("转告客户:")}</strong>
         <br />
-        登录地址 <span className="mono">{location.origin}/login</span>
+        {t("登录地址")} <span className="mono">{location.origin}/login</span>
         <br />
         {user.password_set && plainPassword ? (
           <>
-            登录方式:在登录页切到「账号密码」Tab,输入手机号{" "}
-            <strong className="mono">{user.phone}</strong> + 密码{" "}
-            <strong className="mono">{plainPassword}</strong> → 登录。
+            {t("登录方式:在登录页切到「账号密码」Tab,输入手机号")}{" "}
+            <strong className="mono">{user.phone}</strong> {t("+ 密码")}{" "}
+            <strong className="mono">{plainPassword}</strong> {t("→ 登录。")}
             <br />
-            首次登录后建议在「账户」页改密码,该初始密码本次离开此页就再也看不到。
+            {t("首次登录后建议在「账户」页改密码,该初始密码本次离开此页就再也看不到。")}
           </>
         ) : (
           <>
-            登录方式:输入手机号 <strong className="mono">{user.phone}</strong>,
-            点「发送验证码」,收到 4 位短信验证码后填入并点登录。
+            {t("登录方式:输入手机号")} <strong className="mono">{user.phone}</strong>,
+            {t("点「发送验证码」,收到 4 位短信验证码后填入并点登录。")}
             <br />
             <span style={{ color: "oklch(60% .20 25)" }}>
-              ⚠ SMS 暂未接通时此方式不可用,建议返回上一步重新创建并设置初始密码。
+              {t("⚠ SMS 暂未接通时此方式不可用,建议返回上一步重新创建并设置初始密码。")}
             </span>
           </>
         )}
@@ -496,13 +501,13 @@ function ResultCard({
         }}
       >
         <button className="btn" onClick={onReset}>
-          继续创建下一个
+          {t("继续创建下一个")}
         </button>
         <button
           className="btn btn-primary"
           onClick={() => navigate("/admin/recharge")}
         >
-          返回管理首页
+          {t("返回管理首页")}
         </button>
       </div>
     </div>
@@ -522,6 +527,7 @@ function KV({
   mono?: boolean;
   emphasis?: boolean;
 }) {
+  const t = useT();
   return (
     <div
       style={{
@@ -552,9 +558,9 @@ function KV({
           className="btn btn-sm"
           onClick={onCopy}
           style={{ fontSize: 11, padding: "2px 8px" }}
-          title="复制"
+          title={t("复制")}
         >
-          复制
+          {t("复制")}
         </button>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppTopBar } from "@/components/layout/AppTopBar";
@@ -7,6 +7,7 @@ import { getProject, listProjects, updateProject } from "@/api/projects";
 import { listCharacters } from "@/api/characters";
 import { computeValidation } from "@/lib/validators";
 import { getLastProjectId, setLastProjectId, clearLastProjectId } from "@/lib/lastProject";
+import { useT, useTf } from "@/lib/i18n";
 import type { GlobalLayer, OutputLayer, Project, Shot } from "@/types";
 import { EditorNav } from "./EditorNav";
 import { ShotTimeline } from "./ShotTimeline";
@@ -14,6 +15,7 @@ import { GlobalLayerView } from "./GlobalLayerView";
 import { ShotView } from "./ShotView";
 import { PromptPreviewModal } from "./PromptPreviewModal";
 import { GenerateRequestModal } from "./GenerateRequestModal";
+import { AiPanel } from "./AiPanel";
 
 type ActiveKey = "global" | `shot:${string}`;
 
@@ -40,6 +42,8 @@ const newShot = (): Shot => ({
 
 export function EditorPage() {
   const navigate = useNavigate();
+  const t = useT();
+  const tf = useTf();
   const params = useParams<{ id: string }>();
   const urlId = params.id; // 路由 /editor 时为 undefined;/projects/:id/edit 时为具体 id
 
@@ -126,7 +130,50 @@ export function EditorPage() {
   const [savingProject, setSavingProject] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const resizerRef = useRef<HTMLDivElement>(null);
+  const [aiWidth, setAiWidth] = useState<number | null>(null);
+  const draggingRef = useRef(false);
   const qc = useQueryClient();
+
+  // 拖拽分界线调整：往左拉 → 工作台变窄、AI 面板变宽；往右拉 → 反之。
+  // 起拖用 JSX 的 onMouseDown/onTouchStart 绑定（分界线在项目加载完才渲染，
+  // 不能在 mount 时拿 ref）；移动/松手挂在 window 上，全程跟手。
+  const MIN_AI = 320, MAX_AI = 820;
+  useEffect(() => {
+    const onMove = (clientX: number) => {
+      const el = editorRef.current;
+      if (!el) return;
+      const right = el.getBoundingClientRect().right;
+      const w = Math.max(MIN_AI, Math.min(MAX_AI, right - clientX - 3));
+      setAiWidth(w);
+    };
+    const mm = (e: MouseEvent) => { if (draggingRef.current) onMove(e.clientX); };
+    const tm = (e: TouchEvent) => { if (draggingRef.current) onMove(e.touches[0].clientX); };
+    const up = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.classList.remove("ai-resizing");
+      resizerRef.current?.classList.remove("dragging");
+    };
+    window.addEventListener("mousemove", mm);
+    window.addEventListener("touchmove", tm, { passive: false });
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchend", up);
+    return () => {
+      window.removeEventListener("mousemove", mm);
+      window.removeEventListener("touchmove", tm);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchend", up);
+    };
+  }, []);
+
+  const startResize = (e: SyntheticEvent) => {
+    draggingRef.current = true;
+    document.body.classList.add("ai-resizing");
+    resizerRef.current?.classList.add("dragging");
+    e.preventDefault();
+  };
 
   /**
    * 统一落库。手动「保存」与自动保存共用。
@@ -154,7 +201,7 @@ export function EditorPage() {
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 1800);
     } catch (e) {
-      alert("保存失败:" + (e instanceof Error ? e.message : String(e)));
+      alert(t("保存失败") + ": " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setSavingProject(false);
     }
@@ -284,7 +331,7 @@ export function EditorPage() {
   const deleteShot = (sid: string) => {
     if (!project) return;
     // v0.9.5 分镜可选：允许删到 0 个；删空后回到全局层。
-    if (!confirm("删除该分镜及其全部内容？此操作不可撤销。")) return;
+    if (!confirm(t("删除该分镜及其全部内容？此操作不可撤销。"))) return;
     const idx = project.shots.findIndex((s) => s.id === sid);
     const remaining = project.shots.filter((s) => s.id !== sid);
     setProject({ ...project, shots: remaining });
@@ -303,8 +350,8 @@ export function EditorPage() {
   if (!project || !charsQuery.data) {
     return (
       <>
-        <AppTopBar crumbs={[{ label: "项目", to: "/dashboard" }, { label: "加载中…" }]} />
-        <div style={{ padding: 24, color: "var(--text-tertiary)" }}>加载中…</div>
+        <AppTopBar crumbs={[{ label: t("项目"), to: "/dashboard" }, { label: t("加载中…") }]} />
+        <div style={{ padding: 24, color: "var(--text-tertiary)" }}>{t("加载中…")}</div>
       </>
     );
   }
@@ -318,7 +365,7 @@ export function EditorPage() {
   return (
     <>
       <AppTopBar
-        crumbs={[{ label: "项目", to: "/dashboard" }, { label: project.name }]}
+        crumbs={[{ label: t("项目"), to: "/dashboard" }, { label: project.name }]}
         actions={
           <>
             {/* 必填项缺失常驻提示:点击展开具体列表 */}
@@ -330,22 +377,22 @@ export function EditorPage() {
                   border: "1px solid rgba(255,170,60,.4)",
                   color: "oklch(78% .14 70)",
                 }}
-                title={`缺 ${validation.missing.length} 项必填,点击查看`}
+                title={tf("缺 {n} 项必填，点击查看", { n: validation.missing.length })}
                 onClick={() => setShowMissing(true)}
               >
-                ⚠ 还差 {validation.missing.length} 项必填
+                ⚠ {tf("还差 {n} 项必填", { n: validation.missing.length })}
               </button>
             )}
             <button className="btn btn-sm" onClick={() => saveProject()} disabled={savingProject}>
-              <SaveIcon /> {savingProject ? "保存中…" : "保存"}
+              <SaveIcon /> {savingProject ? t("保存中…") : t("保存")}
             </button>
             <button
               className="btn-primary btn btn-sm"
               disabled={openingModal === "generate"}
               title={
                 validation.canGenerate
-                  ? "生成视频"
-                  : `还差必填:${validation.missing.join(" / ")}`
+                  ? t("生成视频")
+                  : `${t("还差必填")}: ${validation.missing.map((m) => t(m)).join(" / ")}`
               }
               onClick={() => {
                 if (!validation.canGenerate) {
@@ -355,13 +402,17 @@ export function EditorPage() {
                 void ensureFreshAndOpen("generate");
               }}
             >
-              <SparkleIcon /> {openingModal === "generate" ? "准备中…" : "生成视频"}
+              <SparkleIcon /> {openingModal === "generate" ? t("准备中…") : t("生成视频")}
             </button>
           </>
         }
       />
 
-      <div className="editor">
+      <div
+        className="editor has-ai"
+        ref={editorRef}
+        style={aiWidth ? ({ ["--ai-w"]: aiWidth + "px" } as CSSProperties) : undefined}
+      >
         <EditorNav
           project={project}
           activeKey={activeKey}
@@ -410,6 +461,19 @@ export function EditorPage() {
             onAdd={addShot}
           />
         </main>
+
+        <div
+          className="ai-resizer"
+          ref={resizerRef}
+          title={t("拖动调整 AI 面板宽度，双击恢复默认")}
+          onMouseDown={startResize}
+          onTouchStart={startResize}
+          onDoubleClick={() => setAiWidth(null)}
+        >
+          <span className="grip" />
+        </div>
+
+        <AiPanel />
       </div>
 
       {showPrompt && (
@@ -445,7 +509,7 @@ export function EditorPage() {
             boxShadow: "0 10px 30px rgba(0,0,0,.3)",
           }}
         >
-          <CheckIcon /> 已保存 · 项目里可以看到
+          <CheckIcon /> {t("已保存 · 项目里可以看到")}
         </div>
       )}
 
@@ -479,35 +543,39 @@ export function EditorPage() {
               }}
             >
               <div style={{ fontSize: 15, fontWeight: 600 }}>
-                还差 {validation.missing.length} 项必填
+                {tf("还差 {n} 项必填", { n: validation.missing.length })}
               </div>
-              <button className="btn-ghost btn-icon" onClick={() => setShowMissing(false)} title="关闭">
+              <button className="btn-ghost btn-icon" onClick={() => setShowMissing(false)} title={t("关闭")}>
                 <CloseIcon />
               </button>
             </div>
             <div style={{ padding: 18 }}>
               <div className="dim-2" style={{ fontSize: 12, marginBottom: 12 }}>
-                把下列内容填完之后,「生成视频」就能正常使用了:
+                {t("把下列内容填完之后，「生成视频」就能正常使用了:")}
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 2, fontSize: 13 }}>
                 {validation.missing.map((m, i) => (
-                  <li key={i}>{m}</li>
+                  <li key={i}>{t(m)}</li>
                 ))}
               </ul>
               {validation.warnings.length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div className="dim-2" style={{ fontSize: 11, marginBottom: 6 }}>
-                    以下为建议补充（不影响生成，分镜为可选）:
+                    {t("以下为建议补充（不影响生成，分镜为可选）:")}
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.9, fontSize: 12, color: "var(--text-secondary)" }}>
                     {validation.warnings.map((w, i) => (
-                      <li key={i}>{w}</li>
+                      <li key={i}>
+                        {tf("分镜 {label} · 未填角色动作", {
+                          label: w.name ? `${w.idx}「${t(w.name)}」` : w.idx,
+                        })}
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
               <div className="dim-2" style={{ fontSize: 11, marginTop: 14, lineHeight: 1.6 }}>
-                提示:分镜为可选。不填分镜也能直接按全局设定整体生成;填了分镜可对每段单独控制动作 / 运镜 / 台词。
+                {t("提示：分镜为可选。不填分镜也能直接按全局设定整体生成；填了分镜可对每段单独控制动作 / 运镜 / 台词。")}
               </div>
             </div>
             <div
@@ -518,7 +586,7 @@ export function EditorPage() {
               }}
             >
               <button className="btn btn-sm" onClick={() => setShowMissing(false)}>
-                知道了
+                {t("知道了")}
               </button>
             </div>
           </div>

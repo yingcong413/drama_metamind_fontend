@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+
 export function formatYuan(cents: number): string {
   return (cents / 100).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 }
@@ -13,15 +15,16 @@ export function formatDateTime(iso: string): string {
 }
 
 export function formatRelative(iso: string, now: Date = new Date()): string {
-  const t = new Date(iso).getTime();
-  const diff = (now.getTime() - t) / 1000;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`;
-  if (diff < 86400 * 30) return `${Math.floor(diff / 86400 / 7)} 周前`;
-  if (diff < 86400 * 365) return `${Math.floor(diff / 86400 / 30)} 个月前`;
-  return `${Math.floor(diff / 86400 / 365)} 年前`;
+  const ts = new Date(iso).getTime();
+  const diff = (now.getTime() - ts) / 1000;
+  const rel = (zh: string, n: number) => t(zh).replace("{n}", String(n));
+  if (diff < 60) return t("刚刚");
+  if (diff < 3600) return rel("{n} 分钟前", Math.floor(diff / 60));
+  if (diff < 86400) return rel("{n} 小时前", Math.floor(diff / 3600));
+  if (diff < 86400 * 7) return rel("{n} 天前", Math.floor(diff / 86400));
+  if (diff < 86400 * 30) return rel("{n} 周前", Math.floor(diff / 86400 / 7));
+  if (diff < 86400 * 365) return rel("{n} 个月前", Math.floor(diff / 86400 / 30));
+  return rel("{n} 年前", Math.floor(diff / 86400 / 365));
 }
 
 export function formatDuration(seconds: number): string {
@@ -43,7 +46,7 @@ export function isLoadableUrl(s: string | null | undefined): boolean {
  *   data:image/png;base64,iVBOR...        → "本地上传"(data URL 太长,不展开)
  *   纯标签字符串(如 "街道 · 雨夜")            → 原样返回
  */
-export function filenameFromUrl(s: string | null | undefined, dataUrlLabel = "本地上传"): string {
+export function filenameFromUrl(s: string | null | undefined, dataUrlLabel = t("本地上传")): string {
   if (!s) return "";
   if (s.startsWith("data:")) return dataUrlLabel;
   // 优先解析 URL

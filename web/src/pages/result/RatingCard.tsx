@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 
 export function RatingCard() {
+  const t = useT();
   const [rating, setRating] = useState(4);
   return (
     <div className="card" style={{ padding: 20 }}>
@@ -14,7 +16,7 @@ export function RatingCard() {
           color: "var(--text-tertiary)",
         }}
       >
-        评分与反馈
+        {t("评分与反馈")}
       </h4>
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {[1, 2, 3, 4, 5].map((n) => (
@@ -34,7 +36,7 @@ export function RatingCard() {
           </button>
         ))}
       </div>
-      <div className="dim" style={{ fontSize: 12 }}>反馈将用于改进下次生成。</div>
+      <div className="dim" style={{ fontSize: 12 }}>{t("反馈将用于改进下次生成。")}</div>
     </div>
   );
 }

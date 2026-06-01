@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Avatar } from "@/components/primitives/Avatar";
-import { BellIcon, MoonIcon, SunIcon } from "@/components/icons";
+import { BellIcon, MoonIcon, SunIcon, GlobeIcon, ChevronIcon, CheckIcon } from "@/components/icons";
 import { useAuthStore, useCanManageOrg, useIsPlatformAdmin } from "@/stores/auth";
 import { useThemeStore } from "@/stores/theme";
+import { useLangStore } from "@/stores/lang";
+import { LANGS, useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { ChangePasswordDialog } from "@/pages/account/ChangePasswordDialog";
 
@@ -28,6 +30,7 @@ const NAV: Array<{ to: string; label: string; match: (p: string) => boolean }> =
 export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const t = useT();
   const theme = useThemeStore((s) => s.theme);
   const toggle = useThemeStore((s) => s.toggle);
   const token = useAuthStore((s) => s.token);
@@ -103,16 +106,17 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
             to={n.to}
             className={() => cn(n.match(location.pathname) && "active")}
           >
-            {n.label}
+            {t(n.label)}
           </NavLink>
         ))}
       </div>
 
       <div className="topbar-right">
-        <button className="btn-ghost btn-icon" title="主题" onClick={toggle}>
+        <button className="btn-ghost btn-icon" title={t("主题")} onClick={toggle}>
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
-        <button className="btn-ghost btn-icon" title="通知">
+        <LangSwitch />
+        <button className="btn-ghost btn-icon" title={t("通知")}>
           <BellIcon />
         </button>
         {actions}
@@ -120,7 +124,7 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
         <div ref={menuWrapRef} style={{ position: "relative" }}>
           <button
             onClick={onAvatarClick}
-            title={token ? `${user?.name ?? "我"}` : "登录"}
+            title={token ? `${user?.name ?? t("我")}` : t("登录")}
             style={{
               padding: 0,
               background: "transparent",
@@ -163,21 +167,21 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
                 <Avatar name={user?.name ?? "你"} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>
-                    {user?.name ?? "未命名"}
+                    {user?.name ?? t("未命名")}
                   </div>
                   <div
                     className="dim-2 mono"
                     style={{ fontSize: 11, marginTop: 2 }}
                   >
-                    {user?.phone ?? "未绑定手机"}
+                    {user?.phone ?? t("未绑定手机")}
                   </div>
                 </div>
               </div>
 
-              <MenuItem onClick={() => go("/account")}>账户与计费</MenuItem>
+              <MenuItem onClick={() => go("/account")}>{t("账户与计费")}</MenuItem>
               {canManageOrg && (
                 <MenuItem onClick={() => go("/org")}>
-                  组织管理
+                  {t("组织管理")}
                   <span
                     className="dim-2 mono"
                     style={{ fontSize: 10, marginLeft: 6 }}
@@ -188,7 +192,7 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
               )}
               {isPlatformAdmin && (
                 <MenuItem onClick={() => go("/admin/recharge")}>
-                  平台管理 · 手动充值
+                  {t("平台管理 · 手动充值")}
                   <span
                     className="dim-2 mono"
                     style={{ fontSize: 10, marginLeft: 6, color: "oklch(72% .14 70)" }}
@@ -199,7 +203,7 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
               )}
               {isPlatformAdmin && (
                 <MenuItem onClick={() => go("/admin/create-org")}>
-                  平台管理 · 替人开企业
+                  {t("平台管理 · 替人开企业")}
                   <span
                     className="dim-2 mono"
                     style={{ fontSize: 10, marginLeft: 6, color: "oklch(72% .14 70)" }}
@@ -214,11 +218,11 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
                   setShowPwd(true);
                 }}
               >
-                修改密码
+                {t("修改密码")}
               </MenuItem>
               <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
               <MenuItem onClick={onLogout} danger>
-                退出登录
+                {t("退出登录")}
               </MenuItem>
             </div>
           )}
@@ -226,6 +230,56 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
       </div>
 
       {showPwd && <ChangePasswordDialog onClose={() => setShowPwd(false)} />}
+    </div>
+  );
+}
+
+function LangSwitch() {
+  const [open, setOpen] = useState(false);
+  const lang = useLangStore((s) => s.lang);
+  const setLang = useLangStore((s) => s.setLang);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const cur = LANGS.find((l) => l.code === lang) ?? LANGS[2];
+
+  return (
+    <div className="lang-switch" ref={wrapRef}>
+      <button
+        className="btn-ghost btn-sm lang-btn"
+        title="语言 / Language"
+        aria-haspopup="true"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <GlobeIcon />
+        <span className="lang-cur mono">{cur.short}</span>
+        <ChevronIcon className="icon chev" />
+      </button>
+      {open && (
+        <div className="lang-menu">
+          {LANGS.map((l) => (
+            <button
+              key={l.code}
+              className={cn("lang-opt", l.code === lang && "active")}
+              onClick={() => {
+                setLang(l.code);
+                setOpen(false);
+              }}
+            >
+              <span className="lang-name">{l.name}</span>
+              {l.code === lang && <CheckIcon className="icon ck" />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

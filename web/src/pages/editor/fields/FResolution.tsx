@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n";
 import type { GlobalLayer, VideoResolution } from "@/types";
 
 interface Props {
@@ -19,6 +20,7 @@ const RESOLUTIONS: ResMeta[] = [
 ];
 
 export function FResolution({ value, set }: Props) {
+  const t = useT();
   // null 视作默认 720p
   const cur = value.resolution ?? "720p";
   return (
@@ -40,14 +42,14 @@ export function FResolution({ value, set }: Props) {
             >
               <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                 <span style={{ fontSize: 13, lineHeight: 1.2 }}>{r.cn}</span>
-                <span className="dim-2" style={{ fontSize: 10, lineHeight: 1.4 }}>{r.hint}</span>
+                <span className="dim-2" style={{ fontSize: 10, lineHeight: 1.4 }}>{t(r.hint)}</span>
               </span>
             </button>
           );
         })}
       </div>
       <div className="dim-2" style={{ fontSize: 11, lineHeight: 1.5 }}>
-        默认 720p。1080p 是否真正生效取决于上游模型支持，若上游不支持会以默认分辨率出片。
+        {t("默认 720p。1080p 是否真正生效取决于上游模型支持，若上游不支持会以默认分辨率出片。")}
       </div>
     </div>
   );

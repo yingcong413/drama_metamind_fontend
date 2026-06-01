@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 import type { OutputLayer } from "@/types";
 
 interface Props {
@@ -11,14 +12,15 @@ interface Props {
 }
 
 export function FToggle({ value, set, k, on = "要", off = "不要", defaultLabel = "off" }: Props) {
+  const t = useT();
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
       <div className="segmented">
         <button className={cn(!value[k] && "active")} onClick={() => set({ ...value, [k]: false })}>
-          {off}{defaultLabel === "off" && "（默认）"}
+          {t(off)}{defaultLabel === "off" && t("（默认）")}
         </button>
         <button className={cn(value[k] && "active")} onClick={() => set({ ...value, [k]: true })}>
-          {on}{defaultLabel === "on" && "（默认）"}
+          {t(on)}{defaultLabel === "on" && t("（默认）")}
         </button>
       </div>
     </div>

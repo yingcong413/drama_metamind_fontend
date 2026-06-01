@@ -9,6 +9,7 @@ import { loadGenerationResults } from "@/lib/generationResult";
 import { formatDateTime, formatYuan } from "@/lib/format";
 import { StatusBadge } from "../account/StatusBadge";
 import type { TaskStatus } from "@/types";
+import { useT, useTf } from "@/lib/i18n";
 
 // v0.9.6 §11：结果页按项目列出该项目「全部」生成记录（不再只显示一条）。
 // 数据源优先 tasks 表（GET /tasks?project_id=&scope=mine）；拿不到真实任务时
@@ -26,6 +27,8 @@ interface Clip {
 }
 
 export function ResultPage() {
+  const t = useT();
+  const tf = useTf();
   const navigate = useNavigate();
   const { id = "p1" } = useParams<{ id: string }>();
 
@@ -72,8 +75,8 @@ export function ResultPage() {
   if (!project) {
     return (
       <>
-        <AppTopBar crumbs={[{ label: "项目", to: "/dashboard" }, { label: "加载中…" }]} />
-        <div style={{ padding: 24, color: "var(--text-tertiary)" }}>加载中…</div>
+        <AppTopBar crumbs={[{ label: t("项目"), to: "/dashboard" }, { label: t("加载中…") }]} />
+        <div style={{ padding: 24, color: "var(--text-tertiary)" }}>{t("加载中…")}</div>
       </>
     );
   }
@@ -84,13 +87,13 @@ export function ResultPage() {
     <>
       <AppTopBar
         crumbs={[
-          { label: "项目", to: "/dashboard" },
+          { label: t("项目"), to: "/dashboard" },
           { label: project.name, to: `/projects/${project.id}/edit` },
-          { label: "生成结果" },
+          { label: t("生成结果") },
         ]}
         actions={
           <button className="btn-primary btn btn-sm" onClick={goEdit}>
-            <EditIcon /> 修改后再生成
+            <EditIcon /> {t("修改后再生成")}
           </button>
         }
       />
@@ -102,10 +105,10 @@ export function ResultPage() {
               {project.name}
             </div>
             <h1 style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
-              生成结果 · 共 {clips.length} 次
+              {tf("生成结果 · 共 {n} 次", { n: clips.length })}
             </h1>
             <div className="dim" style={{ marginTop: 4, fontSize: 13 }}>
-              同一项目的所有生成记录都在这里，点右侧任意一条查看对应视频。
+              {t("同一项目的所有生成记录都在这里，点右侧任意一条查看对应视频。")}
             </div>
           </div>
 
@@ -117,9 +120,9 @@ export function ResultPage() {
                 color: "var(--text-tertiary)",
               }}
             >
-              <div style={{ fontSize: 14, marginBottom: 8 }}>这个项目还没有生成记录</div>
+              <div style={{ fontSize: 14, marginBottom: 8 }}>{t("这个项目还没有生成记录")}</div>
               <button className="btn-primary btn btn-sm" onClick={goEdit}>
-                <PlayIcon /> 去生成
+                <PlayIcon /> {t("去生成")}
               </button>
             </div>
           ) : (
@@ -141,10 +144,12 @@ export function ResultPage() {
                 ) : (
                   <div style={{ color: "var(--text-tertiary)", fontSize: 13, textAlign: "center", padding: 24 }}>
                     {active?.status === "failed"
-                      ? `生成失败${active.fail_reason ? "：" + active.fail_reason : ""}`
+                      ? active.fail_reason
+                        ? tf("生成失败：{reason}", { reason: active.fail_reason })
+                        : t("生成失败")
                       : active?.status === "running" || active?.status === "queued"
-                        ? "生成进行中，完成后可在此播放…"
-                        : "暂无可播放的视频"}
+                        ? t("生成进行中，完成后可在此播放…")
+                        : t("暂无可播放的视频")}
                   </div>
                 )}
               </div>

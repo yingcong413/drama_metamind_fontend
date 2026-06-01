@@ -1,10 +1,12 @@
 import type { Shot } from "@/types";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   shot: Shot | undefined;
 }
 
 export function ShotInfoCard({ shot }: Props) {
+  const t = useT();
   const actionText = [shot?.action?.start, shot?.action?.mid, shot?.action?.end]
     .filter(Boolean)
     .join(" → ");
@@ -20,7 +22,7 @@ export function ShotInfoCard({ shot }: Props) {
           color: "var(--text-tertiary)",
         }}
       >
-        当前分镜信息
+        {t("当前分镜信息")}
       </h4>
       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
         {shot?.name ?? "—"}

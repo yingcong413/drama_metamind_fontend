@@ -5,6 +5,7 @@
 //   - 不引入第三方 Modal 组件，复用 drawer-mask 半透明遮罩 + 内联 style
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   open: boolean;
@@ -17,6 +18,7 @@ interface Props {
 const FALLBACK_NAME = "未命名项目";
 
 export function NameProjectDialog({ open, onSubmit, onClose, pending }: Props) {
+  const t = useT();
   const [name, setName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -56,7 +58,7 @@ export function NameProjectDialog({ open, onSubmit, onClose, pending }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="新建项目"
+        aria-label={t("新建项目")}
         style={{
           position: "fixed",
           left: "50%",
@@ -78,15 +80,15 @@ export function NameProjectDialog({ open, onSubmit, onClose, pending }: Props) {
           }
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 6 }}>新建项目</div>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 6 }}>{t("新建项目")}</div>
         <div className="dim" style={{ fontSize: 12, marginBottom: 14 }}>
-          给项目起个名字方便以后找到。可以稍后在编辑器里改。
+          {t("给项目起个名字方便以后找到。可以稍后在编辑器里改。")}
         </div>
 
         <input
           ref={inputRef}
           className="input input-lg"
-          placeholder={FALLBACK_NAME}
+          placeholder={t(FALLBACK_NAME)}
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={pending}
@@ -103,14 +105,14 @@ export function NameProjectDialog({ open, onSubmit, onClose, pending }: Props) {
           }}
         >
           <button className="btn" onClick={onClose} disabled={pending}>
-            取消
+            {t("取消")}
           </button>
           <button
             className="btn btn-primary"
             onClick={submit}
             disabled={pending}
           >
-            {pending ? "创建中…" : "创建并进入编辑"}
+            {pending ? t("创建中…") : t("创建并进入编辑")}
           </button>
         </div>
       </div>

@@ -8,11 +8,14 @@ import type { Character } from "@/types";
 import { CharacterTile } from "./CharacterTile";
 import { CharacterList } from "./CharacterList";
 import { CharacterDrawer } from "./CharacterDrawer";
+import { useT, useTf } from "@/lib/i18n";
 
 type Filter = "all" | "ref" | "noref";
 type View = "gallery" | "list";
 
 export function CharactersPage() {
+  const t = useT();
+  const tf = useTf();
   const qc = useQueryClient();
   const { data: characters = [], isLoading } = useQuery({
     queryKey: ["characters"],
@@ -52,7 +55,7 @@ export function CharactersPage() {
   );
 
   const onDelete = (c: Character) => {
-    if (confirm(`确认删除角色「${c.name}」？此操作不可撤销。`)) del.mutate(c.id);
+    if (confirm(tf("确认删除角色「{name}」？此操作不可撤销。", { name: c.name }))) del.mutate(c.id);
   };
 
   const closeDrawer = () => {
@@ -63,10 +66,10 @@ export function CharactersPage() {
   return (
     <>
       <AppTopBar
-        crumbs={[{ label: "角色库" }]}
+        crumbs={[{ label: t("角色库") }]}
         actions={
           <button className="btn-primary btn btn-sm" onClick={() => setCreating(true)}>
-            <PlusIcon /> 新建角色
+            <PlusIcon /> {t("新建角色")}
           </button>
         }
       />
@@ -80,26 +83,25 @@ export function CharactersPage() {
                 textTransform: "uppercase", marginBottom: 8,
               }}
             >
-              Character Library · 选角板
+              Character Library · {t("选角板")}
             </div>
-            <h1>角色库</h1>
+            <h1>{t("角色库")}</h1>
             <p className="char-lib-sub">
-              全局资源，跨项目复用。每个角色由「名 / 参考图 / 描述 / 声线」四部分组成 ——
-              你在「字段 05 · 角色调用」和分镜出场角色中，直接通过此处建立的角色名进行调用。
+              {t("全局资源，跨项目复用。每个角色由「名 / 参考图 / 描述 / 声线」四部分组成 —— 你在「字段 05 · 角色调用」和分镜出场角色中，直接通过此处建立的角色名进行调用。")}
             </p>
           </div>
           <div className="char-lib-stats">
             <div className="stat">
               <div className="stat-n mono">{counts.all}</div>
-              <div className="stat-l">总角色</div>
+              <div className="stat-l">{t("总角色")}</div>
             </div>
             <div className="stat">
               <div className="stat-n mono">{counts.ref}</div>
-              <div className="stat-l">已绑定参考图</div>
+              <div className="stat-l">{t("已绑定参考图")}</div>
             </div>
             <div className="stat">
               <div className="stat-n mono">{counts.noref}</div>
-              <div className="stat-l">无参考图</div>
+              <div className="stat-l">{t("无参考图")}</div>
             </div>
           </div>
         </div>
@@ -107,35 +109,35 @@ export function CharactersPage() {
         <div className="char-lib-toolbar">
           <div className="segmented">
             <button className={cn(filter === "all" && "active")} onClick={() => setFilter("all")}>
-              全部 · {counts.all}
+              {tf("全部 · {n}", { n: counts.all })}
             </button>
             <button className={cn(filter === "ref" && "active")} onClick={() => setFilter("ref")}>
-              有参考图 · {counts.ref}
+              {tf("有参考图 · {n}", { n: counts.ref })}
             </button>
             <button className={cn(filter === "noref" && "active")} onClick={() => setFilter("noref")}>
-              无参考图 · {counts.noref}
+              {tf("无参考图 · {n}", { n: counts.noref })}
             </button>
           </div>
           <div className="cast-search" style={{ maxWidth: 280 }}>
             <SearchIcon />
             <input
-              placeholder="搜索角色…"
+              placeholder={t("搜索角色…")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
           <div className="segmented" style={{ marginLeft: "auto" }}>
             <button className={cn(view === "gallery" && "active")} onClick={() => setView("gallery")}>
-              画廊
+              {t("画廊")}
             </button>
             <button className={cn(view === "list" && "active")} onClick={() => setView("list")}>
-              列表
+              {t("列表")}
             </button>
           </div>
         </div>
 
         {isLoading ? (
-          <div className="dim" style={{ padding: 24 }}>加载中…</div>
+          <div className="dim" style={{ padding: 24 }}>{t("加载中…")}</div>
         ) : view === "gallery" ? (
           <div className="char-gallery">
             {filtered.map((c) => (
@@ -148,9 +150,9 @@ export function CharactersPage() {
             ))}
             <div className="char-tile-add" onClick={() => setCreating(true)}>
               <div className="add-glyph">+</div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>新建角色</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{t("新建角色")}</div>
               <div className="dim-2 mono" style={{ fontSize: 10, marginTop: 4 }}>
-                名字 / 参考图 / 描述 / 声线
+                {t("名字 / 参考图 / 描述 / 声线")}
               </div>
             </div>
           </div>

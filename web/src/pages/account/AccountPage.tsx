@@ -6,6 +6,7 @@ import { getAccount, listRecharges } from "@/api/account";
 import { exportTasksCsv, getTaskStats, listTasks } from "@/api/tasks";
 import { useIsOwner, useAccountType } from "@/stores/auth";
 import { cn } from "@/lib/cn";
+import { useT, useTf } from "@/lib/i18n";
 import type { GenerationTask } from "@/types";
 import { AccountInfoCard } from "./AccountInfoCard";
 import { BalanceHero } from "./BalanceHero";
@@ -32,6 +33,8 @@ const INITIAL_FILTERS: TaskFilters = {
 };
 
 export function AccountPage() {
+  const t = useT();
+  const tf = useTf();
   const [tab, setTab] = useState<Tab>("tasks");
   const [showRecharge, setShowRecharge] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
@@ -84,7 +87,7 @@ export function AccountPage() {
         date_to: filters.date_to,
       });
     } catch (e) {
-      alert(`导出失败:${e instanceof Error ? e.message : String(e)}`);
+      alert(tf("导出失败:{msg}", { msg: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -99,10 +102,10 @@ export function AccountPage() {
   return (
     <>
       <AppTopBar
-        crumbs={[{ label: "账户与计费" }]}
+        crumbs={[{ label: t("账户与计费") }]}
         actions={
           <button className="btn-primary btn btn-sm" onClick={() => setShowRecharge(true)}>
-            <PlusIcon /> 充值
+            <PlusIcon /> {t("充值")}
           </button>
         }
       />
@@ -120,20 +123,20 @@ export function AccountPage() {
           <div className="acc-section-head">
             <div className="acc-tabs">
               <button className={cn(tab === "tasks" && "active")} onClick={() => setTab("tasks")}>
-                任务记录
+                {t("任务记录")}
                 <span className="acc-tab-count mono">{counts.tasks}</span>
               </button>
               <button
                 className={cn(tab === "recharges" && "active")}
                 onClick={() => setTab("recharges")}
               >
-                充值记录
+                {t("充值记录")}
                 <span className="acc-tab-count mono">{counts.recharges}</span>
               </button>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-sm" onClick={handleExport} disabled={tab !== "tasks"}>
-                导出 .csv
+                {t("导出 .csv")}
               </button>
             </div>
           </div>

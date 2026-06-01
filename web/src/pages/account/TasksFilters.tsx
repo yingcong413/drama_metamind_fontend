@@ -1,6 +1,7 @@
 import { SearchIcon } from "@/components/icons";
 import { useIsOwner, useAccountType } from "@/stores/auth";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 import type { TaskStatus } from "@/types";
 
 export interface TaskFilters {
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function TasksFilters({ filters, setFilters }: Props) {
+  const t = useT();
   const isOwner = useIsOwner();
   const accountType = useAccountType();
   // 只有企业 Owner 才看到「我的 / 全公司」tab;个人 Owner / Member 都没必要
@@ -47,20 +49,20 @@ export function TasksFilters({ filters, setFilters }: Props) {
             className={cn(filters.scope === "mine" && "active")}
             onClick={() => setFilters({ ...filters, scope: "mine" })}
           >
-            我的任务
+            {t("我的任务")}
           </button>
           <button
             type="button"
             className={cn(filters.scope === "all" && "active")}
             onClick={() => setFilters({ ...filters, scope: "all" })}
           >
-            全公司任务
+            {t("全公司任务")}
           </button>
         </div>
       )}
       <div className="tasks-filter-row">
         <div className="tasks-filter date">
-          <span className="dim-2 mono" style={{ fontSize: 10 }}>提交时间</span>
+          <span className="dim-2 mono" style={{ fontSize: 10 }}>{t("提交时间")}</span>
           <input
             className="input"
             placeholder="2026-05-09 00:00:00"
@@ -76,7 +78,7 @@ export function TasksFilters({ filters, setFilters }: Props) {
           />
         </div>
         <div className="tasks-filter">
-          <span className="dim-2 mono" style={{ fontSize: 10 }}>任务 ID</span>
+          <span className="dim-2 mono" style={{ fontSize: 10 }}>{t("任务 ID")}</span>
           <div className="cast-search" style={{ padding: "5px 10px" }}>
             <SearchIcon />
             <input
@@ -87,21 +89,21 @@ export function TasksFilters({ filters, setFilters }: Props) {
           </div>
         </div>
         <div className="tasks-filter">
-          <span className="dim-2 mono" style={{ fontSize: 10 }}>状态</span>
+          <span className="dim-2 mono" style={{ fontSize: 10 }}>{t("状态")}</span>
           <select
             className="select"
             value={filters.status}
             onChange={(e) => setFilters({ ...filters, status: e.target.value as TaskFilters["status"] })}
           >
-            <option value="all">全部</option>
-            <option value="success">成功</option>
-            <option value="running">进行中</option>
-            <option value="queued">排队中</option>
-            <option value="failed">失败</option>
+            <option value="all">{t("全部")}</option>
+            <option value="success">{t("成功")}</option>
+            <option value="running">{t("进行中")}</option>
+            <option value="queued">{t("排队中")}</option>
+            <option value="failed">{t("失败")}</option>
           </select>
         </div>
         <div className="tasks-filter">
-          <span className="dim-2 mono" style={{ fontSize: 10 }}>清晰度</span>
+          <span className="dim-2 mono" style={{ fontSize: 10 }}>{t("清晰度")}</span>
           <select
             className="select"
             value={filters.resolution}
@@ -109,15 +111,15 @@ export function TasksFilters({ filters, setFilters }: Props) {
               setFilters({ ...filters, resolution: e.target.value as TaskFilters["resolution"] })
             }
           >
-            <option value="all">全部</option>
+            <option value="all">{t("全部")}</option>
             <option value="720p">720p</option>
             <option value="1080p">1080p</option>
           </select>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 6 }}>
-          <button className="btn btn-sm" onClick={reset}>重置</button>
-          <button className="btn btn-primary btn-sm">查询</button>
+          <button className="btn btn-sm" onClick={reset}>{t("重置")}</button>
+          <button className="btn btn-primary btn-sm">{t("查询")}</button>
         </div>
       </div>
     </div>

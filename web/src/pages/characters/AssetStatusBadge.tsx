@@ -7,6 +7,7 @@
 // 颜色基于已有 .micro-tag 风格 + 内联 style 兜底（保证暗黑/明亮主题都能看清）。
 
 import type { AssetStatus } from "@/types";
+import { useT, useTf } from "@/lib/i18n";
 
 interface Props {
   status: AssetStatus;
@@ -27,7 +28,10 @@ const STYLE_MAP: Record<AssetStatus, { bg: string; color: string; label: string 
 };
 
 export function AssetStatusBadge({ status, error, onReupload, compact }: Props) {
+  const t = useT();
+  const tf = useTf();
   const s = STYLE_MAP[status];
+  const label = t(s.label);
   const isFailed = status === "failed";
   const padding = compact ? "2px 6px" : "3px 8px";
   const fontSize = compact ? 10 : 11;
@@ -46,7 +50,7 @@ export function AssetStatusBadge({ status, error, onReupload, compact }: Props) 
           borderRadius: 999,
           lineHeight: 1.2,
         }}
-        title={isFailed && error ? `失败原因：${error}` : s.label}
+        title={isFailed && error ? tf("失败原因：{error}", { error }) : label}
       >
         {(status === "processing" || status === "uploading") && (
           <span
@@ -59,8 +63,8 @@ export function AssetStatusBadge({ status, error, onReupload, compact }: Props) 
             }}
           />
         )}
-        {s.label}
-        {isFailed && error && <span style={{ opacity: 0.7 }}>：{trimError(error)}</span>}
+        {label}
+        {isFailed && error && <span style={{ opacity: 0.7 }}>：{t(trimError(error))}</span>}
       </span>
       {isFailed && onReupload && (
         <button
@@ -80,7 +84,7 @@ export function AssetStatusBadge({ status, error, onReupload, compact }: Props) 
             onReupload();
           }}
         >
-          重新上传
+          {t("重新上传")}
         </button>
       )}
     </span>

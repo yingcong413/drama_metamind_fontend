@@ -1,5 +1,6 @@
 import { PlayIcon } from "@/components/icons";
 import type { Shot } from "@/types";
+import { useT, useTf } from "@/lib/i18n";
 
 interface Props {
   activeIndex: number;
@@ -23,6 +24,8 @@ export function VideoStage({
   totalSeconds,
   videoUrl,
 }: Props) {
+  const t = useT();
+  const tf = useTf();
   const playedPct = totalSeconds > 0 ? Math.min(100, (currentSeconds / totalSeconds) * 100) : 0;
 
   // 有真实 URL → 用原生 <video> 渲染,带浏览器控件
@@ -56,7 +59,7 @@ export function VideoStage({
             pointerEvents: "none",
           }}
         >
-          分镜 {String(activeIndex + 1).padStart(2, "0")} · {shot?.name ?? "—"}
+          {tf("分镜 {n} · {name}", { n: String(activeIndex + 1).padStart(2, "0"), name: shot?.name ?? "—" })}
         </div>
       </div>
     );
@@ -83,9 +86,9 @@ export function VideoStage({
         <div>
           <div>VIDEO PREVIEW · 9:16</div>
           <div style={{ marginTop: 12, fontSize: 11, opacity: 0.7 }}>
-            该项目尚未生成或视频地址已失效
+            {t("该项目尚未生成或视频地址已失效")}
             <br />
-            回到编辑器点「生成视频」获取结果
+            {t("回到编辑器点「生成视频」获取结果")}
           </div>
         </div>
       </div>
@@ -102,7 +105,7 @@ export function VideoStage({
           fontSize: 11,
         }}
       >
-        分镜 {String(activeIndex + 1).padStart(2, "0")} · {shot?.name ?? "—"}
+        {tf("分镜 {n} · {name}", { n: String(activeIndex + 1).padStart(2, "0"), name: shot?.name ?? "—" })}
       </div>
       <div className="video-controls">
         <div className="video-timeline">

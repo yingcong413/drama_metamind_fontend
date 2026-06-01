@@ -1,6 +1,7 @@
 import { CopyIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { Portrait } from "./Portrait";
 import type { Character } from "@/types";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   characters: Character[];
@@ -9,14 +10,15 @@ interface Props {
 }
 
 export function CharacterList({ characters, onEdit, onDelete }: Props) {
+  const t = useT();
   return (
     <div className="char-list">
       <div className="char-list-head">
-        <span className="char-list-cell name">角色</span>
-        <span className="char-list-cell role">定位</span>
-        <span className="char-list-cell desc">描述</span>
-        <span className="char-list-cell tags">标签</span>
-        <span className="char-list-cell ref">参考图</span>
+        <span className="char-list-cell name">{t("角色")}</span>
+        <span className="char-list-cell role">{t("定位")}</span>
+        <span className="char-list-cell desc">{t("描述")}</span>
+        <span className="char-list-cell tags">{t("标签")}</span>
+        <span className="char-list-cell ref">{t("参考图")}</span>
         <span className="char-list-cell actions" />
       </div>
       {characters.map((c) => (
@@ -43,10 +45,10 @@ export function CharacterList({ characters, onEdit, onDelete }: Props) {
                   color: "oklch(75% .13 230)",
                 }}
               >
-                已绑定
+                {t("已绑定")}
               </span>
             ) : (
-              <span className="micro-tag">无</span>
+              <span className="micro-tag">{t("无")}</span>
             )}
           </div>
           <div className="char-list-cell actions">

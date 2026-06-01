@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { GithubIcon, GoogleIcon, MicIcon, SparkleIcon } from "@/components/icons";
+import { useT } from "@/lib/i18n";
 import { loginPassword, loginPhone, registerPhone } from "@/api/auth";
 import { USE_REAL_AUTH } from "@/api/client";
 
@@ -32,6 +33,7 @@ const PRIVACY_TEXT = `隐私政策(占位)
 所有数据在 7 天内自动清理,测试期内不做长期保留。`;
 
 export function LoginPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   // RequireAuth 在跳 /login 时把原路径放在 state.from,登录后跳回去
@@ -96,10 +98,10 @@ export function LoginPage() {
   const submit = useMutation({
     mutationFn: async () => {
       if (mode === "signup") {
-        if (!agreeTerms) throw new Error("请先同意用户协议");
+        if (!agreeTerms) throw new Error(t("请先同意用户协议"));
         if (accountType === "enterprise") {
           if (orgName.trim().length < 2 || orgName.trim().length > 30) {
-            throw new Error("企业名称 2-30 字");
+            throw new Error(t("企业名称 2-30 字"));
           }
         }
         return registerPhone({
@@ -159,9 +161,9 @@ export function LoginPage() {
       const names: Record<typeof provider, string> = {
         google: "Google",
         github: "GitHub",
-        wechat: "微信",
+        wechat: t("微信"),
       };
-      alert(`${names[provider]} 授权登录在 mock 模式下不可用\n\n请使用「Demo 一键登录」或手机验证码登录。\n生产模式(VITE_USE_MOCK=false)+ 后端配置好对应 OAuth 应用后即可使用。`);
+      alert(`${names[provider]} ${t("授权登录在 mock 模式下不可用\n\n请使用「Demo 一键登录」或手机验证码登录。\n生产模式(VITE_USE_MOCK=false)+ 后端配置好对应 OAuth 应用后即可使用。")}`);
       return;
     }
     if (provider === "wechat") {
@@ -181,9 +183,8 @@ export function LoginPage() {
           <span>制影 AI</span>
         </div>
         <div className="quote">
-          把视频生成的 17 个变量交还给创作者本身，
-          而不是托付给一个不可控的输入框。
-          <span className="who">— 制影 AI · 产品宣言</span>
+          {t("把视频生成的 17 个变量交还给创作者本身，而不是托付给一个不可控的输入框。")}
+          <span className="who">{t("— 制影 AI · 产品宣言")}</span>
         </div>
         <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
           <svg
@@ -215,23 +216,22 @@ export function LoginPage() {
                 lineHeight: 1.6,
               }}
             >
-              测试期所有人共用 <strong style={{ color: "var(--text)" }}>Demo 账号</strong>,直接点下方按钮即可进入。
-              如果想体验完整注册流程,可走「注册」标签输任意手机号 + 任意 6 位数字验证码。
+              {t("测试期所有人共用")} <strong style={{ color: "var(--text)" }}>{t("Demo 账号")}</strong>{t(",直接点下方按钮即可进入。如果想体验完整注册流程,可走「注册」标签输任意手机号 + 任意 6 位数字验证码。")}
             </div>
           )}
 
           <div className="segmented" style={{ alignSelf: "flex-start" }}>
             <button type="button" className={cn(mode === "login" && "active")} onClick={() => setMode("login")}>
-              登录
+              {t("登录")}
             </button>
             <button type="button" className={cn(mode === "signup" && "active")} onClick={() => setMode("signup")}>
-              注册
+              {t("注册")}
             </button>
           </div>
 
-          <h1>{mode === "login" ? "欢迎回来" : "开始你的第一个短剧"}</h1>
+          <h1>{mode === "login" ? t("欢迎回来") : t("开始你的第一个短剧")}</h1>
           <div className="sub">
-            {mode === "login" ? "继续未完成的项目，或开启新的创作。" : "使用大陆手机号注册，免邮箱、免密码。"}
+            {mode === "login" ? t("继续未完成的项目，或开启新的创作。") : t("使用大陆手机号注册，免邮箱、免密码。")}
           </div>
 
           {mode === "login" && (
@@ -241,15 +241,15 @@ export function LoginPage() {
                 className={cn(method === "phone" && "active")}
                 onClick={() => setMethod("phone")}
               >
-                <MicIcon /> 手机验证码
-                <span className="dim-2 mono" style={{ fontSize: 9, marginLeft: 4 }}>推荐</span>
+                <MicIcon /> {t("手机验证码")}
+                <span className="dim-2 mono" style={{ fontSize: 9, marginLeft: 4 }}>{t("推荐")}</span>
               </button>
               <button
                 type="button"
                 className={cn(method === "account" && "active")}
                 onClick={() => setMethod("account")}
               >
-                账号密码
+                {t("账号密码")}
               </button>
             </div>
           )}
@@ -270,7 +270,7 @@ export function LoginPage() {
           {mode === "signup" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div className="dim-2" style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)" }}>
-                账户类型
+                {t("账户类型")}
               </div>
               <div className="segmented" style={{ alignSelf: "stretch" }}>
                 <button
@@ -279,7 +279,7 @@ export function LoginPage() {
                   onClick={() => setAccountType("personal")}
                   style={{ flex: 1, justifyContent: "center" }}
                 >
-                  个人账户
+                  {t("个人账户")}
                 </button>
                 <button
                   type="button"
@@ -287,18 +287,18 @@ export function LoginPage() {
                   onClick={() => setAccountType("enterprise")}
                   style={{ flex: 1, justifyContent: "center" }}
                 >
-                  企业账户
+                  {t("企业账户")}
                 </button>
               </div>
               <div className="dim-2" style={{ fontSize: 11, lineHeight: 1.6 }}>
                 {accountType === "personal"
-                  ? "适合独立创作者:1 个席位、私人素材库、私人余额。"
-                  : "适合公司团队:默认 20 席位,组织内共享素材库,你是 Owner 可邀请成员。"}
+                  ? t("适合独立创作者:1 个席位、私人素材库、私人余额。")
+                  : t("适合公司团队:默认 20 席位,组织内共享素材库,你是 Owner 可邀请成员。")}
               </div>
               {accountType === "enterprise" && (
                 <input
                   className="input input-lg"
-                  placeholder="公司名(2-30 字,可后续修改)"
+                  placeholder={t("公司名(2-30 字,可后续修改)")}
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
                   maxLength={30}
@@ -326,27 +326,27 @@ export function LoginPage() {
                 style={{ marginTop: 3 }}
               />
               <span>
-                我已阅读并同意{" "}
+                {t("我已阅读并同意")}{" "}
                 <a
                   style={{ color: "var(--text)", cursor: "pointer" }}
                   onClick={(e) => {
                     e.preventDefault();
-                    alert(TERMS_TEXT);
+                    alert(t(TERMS_TEXT));
                   }}
                 >
-                  《用户协议》
+                  {t("《用户协议》")}
                 </a>{" "}
-                与{" "}
+                {t("与")}{" "}
                 <a
                   style={{ color: "var(--text)", cursor: "pointer" }}
                   onClick={(e) => {
                     e.preventDefault();
-                    alert(PRIVACY_TEXT);
+                    alert(t(PRIVACY_TEXT));
                   }}
                 >
-                  《隐私政策》
+                  {t("《隐私政策》")}
                 </a>
-                。
+                {t("。")}
               </span>
             </label>
           )}
@@ -358,7 +358,7 @@ export function LoginPage() {
           )}
           {demo.isError && (
             <div className="dim-2" style={{ fontSize: 12, color: "oklch(72% .15 25)" }}>
-              Demo 登录失败:{(demo.error as Error).message}
+              {t("Demo 登录失败")}:{(demo.error as Error).message}
             </div>
           )}
 
@@ -369,7 +369,7 @@ export function LoginPage() {
             disabled={!canSubmit || submit.isPending}
             onClick={() => submit.mutate()}
           >
-            {submit.isPending ? "处理中…" : mode === "login" ? "登录" : "注册并登录"}
+            {submit.isPending ? t("处理中…") : mode === "login" ? t("登录") : t("注册并登录")}
           </button>
 
           <div
@@ -382,7 +382,7 @@ export function LoginPage() {
             }}
           >
             <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-            或使用其它方式
+            {t("或使用其它方式")}
             <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
           </div>
 
@@ -401,26 +401,26 @@ export function LoginPage() {
               disabled={demo.isPending}
               onClick={() => demo.mutate()}
             >
-              <SparkleIcon /> {demo.isPending ? "登录中…" : "使用 Demo 账号一键登录"}
+              <SparkleIcon /> {demo.isPending ? t("登录中…") : t("使用 Demo 账号一键登录")}
             </button>
           )}
 
           {/* 第三方 OAuth 三件套:Google / GitHub / 微信 */}
           <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
             <OAuthIconButton
-              label="使用 Google 账号登录"
+              label={t("使用 Google 账号登录")}
               onClick={() => openOAuth("google")}
             >
               <GoogleIcon />
             </OAuthIconButton>
             <OAuthIconButton
-              label="使用 GitHub 账号登录"
+              label={t("使用 GitHub 账号登录")}
               onClick={() => openOAuth("github")}
             >
               <GithubIcon />
             </OAuthIconButton>
             <OAuthIconButton
-              label="使用微信扫码登录"
+              label={t("使用微信扫码登录")}
               onClick={() => openOAuth("wechat")}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="oklch(70% .14 150)">
@@ -431,14 +431,14 @@ export function LoginPage() {
 
           {mode === "login" && (
             <div className="dim-2" style={{ fontSize: 11, marginTop: 4, textAlign: "center" }}>
-              还没有账号？
+              {t("还没有账号？")}
               <button
                 type="button"
                 className="btn-ghost btn-sm"
                 style={{ padding: 0, color: "var(--accent)" }}
                 onClick={() => setMode("signup")}
               >
-                立即注册
+                {t("立即注册")}
               </button>
             </div>
           )}

@@ -1,6 +1,7 @@
 import { CopyIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { Portrait } from "./Portrait";
 import type { Character } from "@/types";
+import { useT, useTf } from "@/lib/i18n";
 
 interface Props {
   character: Character;
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
+  const t = useT();
+  const tf = useTf();
   const counts = c.asset_bundle?.counts ?? { image: 0, video: 0, audio: 0 };
   const processing = c.asset_bundle?.processing_count ?? 0;
   const failed = c.asset_bundle?.failed_count ?? 0;
@@ -21,10 +24,10 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
         <div className="char-tile-id mono">{c.id.toUpperCase()}</div>
         {hasAnyAsset ? (
           <span className="char-tile-flag flag-ref">
-            {countsLabel(counts)}
+            {countsLabel(counts, tf)}
           </span>
         ) : (
-          <span className="char-tile-flag flag-noref">无素材</span>
+          <span className="char-tile-flag flag-noref">{t("无素材")}</span>
         )}
         {/* v0.7：processing/failed 角标 */}
         {(processing > 0 || failed > 0) && (
@@ -39,7 +42,7 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
           >
             {processing > 0 && (
               <span
-                title={`${processing} 个素材校验中`}
+                title={tf("{n} 个素材校验中", { n: processing })}
                 style={{
                   background: "#DBEAFE",
                   color: "#1E40AF",
@@ -65,7 +68,7 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
             )}
             {failed > 0 && (
               <span
-                title={`${failed} 个素材失败`}
+                title={tf("{n} 个素材失败", { n: failed })}
                 style={{
                   background: "#FEE2E2",
                   color: "#991B1B",
@@ -97,12 +100,12 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
               onEdit();
             }}
           >
-            <EditIcon /> 编辑
+            <EditIcon /> {t("编辑")}
           </button>
           <button
             className="btn btn-sm btn-ghost"
             onClick={(e) => e.stopPropagation()}
-            title="复制"
+            title={t("复制")}
           >
             <CopyIcon />
           </button>
@@ -112,7 +115,7 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
               e.stopPropagation();
               onDelete();
             }}
-            title="删除"
+            title={t("删除")}
           >
             <TrashIcon />
           </button>
@@ -122,10 +125,13 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
   );
 }
 
-function countsLabel(counts: { image: number; video: number; audio: number }): string {
+function countsLabel(
+  counts: { image: number; video: number; audio: number },
+  tf: (zh: string, vars: Record<string, string | number>) => string,
+): string {
   const parts: string[] = [];
-  if (counts.image > 0) parts.push(`图 ${counts.image}`);
-  if (counts.video > 0) parts.push(`视频 ${counts.video}`);
-  if (counts.audio > 0) parts.push(`音 ${counts.audio}`);
+  if (counts.image > 0) parts.push(tf("图 {n}", { n: counts.image }));
+  if (counts.video > 0) parts.push(tf("视频 {n}", { n: counts.video }));
+  if (counts.audio > 0) parts.push(tf("音 {n}", { n: counts.audio }));
   return parts.join(" · ");
 }

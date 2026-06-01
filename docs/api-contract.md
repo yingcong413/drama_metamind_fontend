@@ -1,4 +1,4 @@
-# 制影 AI · 短剧工坊 — 前后端接口契约 v0.4
+# 制影 AI · 短剧工坊 — 前后端接口契约 v0.5
 
 > 本文档基于 Claude Design 输出的 UI 原型（`metamind_duanju-handoff.zip`）梳理而来，覆盖原型中全部交互点。
 > 前端：React + TypeScript。后端：Go。AI 视频生成调用「new API（ApiGo VIP）」平台模型，由后端代理，前端只与本服务交互。
@@ -78,6 +78,24 @@
 ### 1.5 ID 与软删除
 - 删除统一为软删除（`deleted_at` 字段在数据库层），列表接口默认过滤掉已删除。
 - 已删除资源被读取返回 `40401`。
+
+### 1.6 国际化 / 多语言（i18n）
+
+前端已支持 **6 种语言**：`zh-CN`（默认）、`zh-TW`、`en`、`fr`、`es`、`ar`（阿拉伯语，RTL 布局）。
+实现为**纯前端展示层切换**：以「中文原文」为 key 查表翻译（`web/src/lib/i18nDict.ts` + `web/src/lib/i18nFrags/*`），未命中的串回退显示中文。语言偏好存浏览器 localStorage（key `metamind-lang`），**当前不落后端、不参与任何请求**。
+
+这对接口契约有两点约束，后端务必注意：
+
+1. **存储 / 传输的数据一律保持「中文 canonical 值」，后端不要本地化、且需保持字符串稳定** —— 这些值同时是前端翻译表的 key，改一个字（含全半角标点）就会丢翻译。涉及：
+   - `/meta/options` 的全部枚举：`styles`、`tags`、`speed_options`、`magnitude_options`、`direction_options`、`shot_sizes`（`cn` 字段）等；
+   - `Character.role`、`Character.tags`（如「女主 / 男主 / 配角 / 路人 / 都市 / 校园 …」）；
+   - `Shot.camera[].speed/magnitude/direction`（「慢/中/快」「小/中/大」「左/右/上/下」）；
+   - 项目 / 分镜的默认名（`"未命名项目"`、`"新分镜"`）。
+   > 即：所有「枚举/标签/默认名」走中文原文，前端在渲染时翻译；后端按原样存取即可。
+
+2. **面向用户的消息文案（`message`、`data.errors[].msg`）目前是中文**，前端无法对任意后端串做本地化（只命中翻译表里登记过的固定串）。因此非中文用户会看到中文报错。本地化策略待对齐，见 §5.14 / §5.15。
+
+> CSS / 交互层改动（如 chip hover 态）不影响接口，不在本文档范围。
 
 ---
 
@@ -797,6 +815,8 @@ Query：
 8. **多端 token 互踢**：登录时 `remember=false` 是否要踢掉其他端？
 9. **数据导出合规**：CSV 导出是否要脱敏（手机号、user 字段）？
 10. **AI 润色** 调用 new API 哪个模型？建议默认 `claude-opus-4-7`，可配置。
+14. **后端消息本地化（i18n）**：`message` / `data.errors[].msg` 当前是中文，非中文用户看到中文报错。建议二选一：① 后端只返回稳定的 `code`（含 422 的 `field` + 机器可读 `reason` 码），由前端映射各语言文案；② 后端按请求头 `Accept-Language` 返回对应语言文案。倾向方案①（前端已有翻译表基建）。
+15. **语言偏好是否落后端**：当前仅存浏览器 localStorage（`metamind-lang`），换设备 / 清缓存即丢。是否需要写入 account（`/auth/me`、`/account` 返回 `lang`，登录后端点更新），以便多端同步、并供后端按语言发通知 / 发票。
 
 ---
 
@@ -807,4 +827,5 @@ Query：
 | v0.1   | 2026-05-17   | 初版，覆盖原型全部交互        |
 | v0.2   | 2026-05-18   | 按 v0.1 前端实际代码对齐:`GenerationTask.type` 改为对象 `TaskTypeInfo`、补 `user` 字段;`/account/recharges` 列表响应明确为 `RechargeRecord[]`(新增类型);`/characters` 当前返回扁平数组而非分页;新增 §3.0 P0 接入清单 |
 | v0.3   | 2026-05-18   | 旁白音频改为全局统一上传:`GlobalLayer` 新增 `narration_audio_url`;分镜的台词/内心独白/旁白改为**仅文字**,台词/独白配音由角色 `voice_sample_url` 后端合成回填 `SpeechBlock.audio_url`;`/uploads/audio` 的 `purpose` 收敛为 `narration`(全局旁白)\| `voice_sample`(角色声线) |
+| v0.5   | 2026-06-01   | 新增 §1.6 国际化：前端支持 6 语言（zh-CN/zh-TW/en/fr/es/ar，ar 为 RTL），纯前端展示层翻译、语言偏好仅存 localStorage。明确约束：① `/meta/options` 枚举、`Character.role/tags`、`camera` 的 速度/幅度/方向、项目/分镜默认名等**保持中文 canonical 值且需稳定**（同时是翻译表 key），后端不本地化；② 后端 `message`/`errors[].msg` 仍为中文，前端无法本地化任意串。§5 新增待对齐项 14（后端消息本地化策略）、15（语言偏好是否落后端）。纯 CSS/交互改动不影响契约。 |
 | v0.4   | 2026-05-18   | 按编辑器最新改动整体对齐:① 移除时间模块(`GlobalLayer.season/time_of_day` 删除,`/meta/options` 去掉 `seasons/time_of_day`);② `GlobalLayer` 新增 `total_duration_seconds`(视频总时长,必填);③ `Shot` 新增 `shot_size`(景别,单选,见 §2.2.1)、`duration_seconds`(分镜时长,选填)、`action_strength/micro_strength/gesture_strength`(强度 0-100,默认 65);④ `global.style`、`shot.camera` 改为**单选**(数组长度 ≤ 1);⑤ 场景/站位图均为**单图**;⑥ 字段编号整体重排:全局 01-10、分镜 11-20(另有分镜步骤 00 出场角色);⑦ `/meta/options.styles` 更新为实际 5 项并新增 `shot_sizes`;§3.4 校验规则补充 |

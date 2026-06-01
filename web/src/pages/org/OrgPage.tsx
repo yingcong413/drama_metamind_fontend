@@ -29,8 +29,11 @@ import {
 } from "@/api/org";
 import type { OrgMember } from "@/types";
 import { useNavigate } from "react-router-dom";
+import { useT, useTf } from "@/lib/i18n";
 
 export function OrgPage() {
+  const t = useT();
+  const tf = useTf();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const canManageOrg = useCanManageOrg();
@@ -111,7 +114,12 @@ export function OrgPage() {
   });
   const resetPwd = useMutation({
     mutationFn: (id: string) => resetMemberPassword(id),
-    onSuccess: (r) => alert(`新密码:${r.new_password}\n请妥善转告该成员,本提示只显示一次。`),
+    onSuccess: (r) =>
+      alert(
+        tf("新密码:{pwd}", { pwd: r.new_password }) +
+          "\n" +
+          t("请妥善转告该成员,本提示只显示一次。"),
+      ),
   });
   const kick = useMutation({
     mutationFn: (id: string) => kickMember(id),
@@ -139,8 +147,8 @@ export function OrgPage() {
   if (!user) {
     return (
       <>
-        <AppTopBar crumbs={[{ label: "组织管理" }]} />
-        <div style={{ padding: 24 }}>请先登录</div>
+        <AppTopBar crumbs={[{ label: t("组织管理") }]} />
+        <div style={{ padding: 24 }}>{t("请先登录")}</div>
       </>
     );
   }
@@ -149,11 +157,11 @@ export function OrgPage() {
   if (isMember) {
     return (
       <>
-        <AppTopBar crumbs={[{ label: "组织管理" }]} />
+        <AppTopBar crumbs={[{ label: t("组织管理") }]} />
         <div className="char-lib" style={{ maxWidth: 720 }}>
-          <h1>当前组织</h1>
+          <h1>{t("当前组织")}</h1>
           <div className="dim" style={{ marginBottom: 16 }}>
-            你是「{orgQuery.data?.name}」的成员。Owner 拥有管理权限;你只能创作、提交生成、查看本人任务。
+            {tf("你是「{org}」的成员。Owner 拥有管理权限;你只能创作、提交生成、查看本人任务。", { org: orgQuery.data?.name ?? "" })}
           </div>
           <section
             style={{
@@ -163,22 +171,21 @@ export function OrgPage() {
               background: "var(--surface)",
             }}
           >
-            <h2 style={{ marginTop: 0 }}>离开组织</h2>
+            <h2 style={{ marginTop: 0 }}>{t("离开组织")}</h2>
             <p className="dim-2" style={{ fontSize: 13, lineHeight: 1.6 }}>
-              离开后:你的角色会立即变为「个人账户 Owner」,但你在本组织创建的项目 /
-              角色 / 已上传素材将保留在本组织内,不会带走。
+              {t("离开后:你的角色会立即变为「个人账户 Owner」,但你在本组织创建的项目 / 角色 / 已上传素材将保留在本组织内,不会带走。")}
             </p>
             <button
               className="btn"
               style={{ borderColor: "oklch(72% .15 25)", color: "oklch(72% .15 25)" }}
               disabled={leave.isPending}
               onClick={() => {
-                if (confirm("确认离开本组织?数据将留在原组织,你将变成个人账户。")) {
+                if (confirm(t("确认离开本组织?数据将留在原组织,你将变成个人账户。"))) {
                   leave.mutate();
                 }
               }}
             >
-              {leave.isPending ? "处理中…" : "离开组织"}
+              {leave.isPending ? t("处理中…") : t("离开组织")}
             </button>
           </section>
         </div>
@@ -190,11 +197,11 @@ export function OrgPage() {
   if (!canManageOrg) {
     return (
       <>
-        <AppTopBar crumbs={[{ label: "组织管理" }]} />
+        <AppTopBar crumbs={[{ label: t("组织管理") }]} />
         <div className="char-lib" style={{ maxWidth: 720 }}>
-          <h1>升级为企业账户</h1>
+          <h1>{t("升级为企业账户")}</h1>
           <div className="dim" style={{ marginBottom: 24 }}>
-            你当前是个人账户(1 个席位、私人素材库、私人余额)。升级后可邀请同事加入组织,共享素材库与余额。
+            {t("你当前是个人账户(1 个席位、私人素材库、私人余额)。升级后可邀请同事加入组织,共享素材库与余额。")}
           </div>
           <section
             style={{
@@ -208,17 +215,17 @@ export function OrgPage() {
             }}
           >
             <div style={{ fontSize: 14, lineHeight: 1.8 }}>
-              升级后获得:
+              {t("升级后获得:")}
               <ul style={{ paddingLeft: 20, marginTop: 8 }}>
-                <li>默认 20 个席位(需更多请联系制影 AI 商务)</li>
-                <li>组织内成员共享素材库与角色库</li>
-                <li>统一的企业余额账户与发票抬头</li>
-                <li>邀请 / 禁用 / 重置成员密码 / 转让 Owner 等管理权限</li>
+                <li>{t("默认 20 个席位(需更多请联系制影 AI 商务)")}</li>
+                <li>{t("组织内成员共享素材库与角色库")}</li>
+                <li>{t("统一的企业余额账户与发票抬头")}</li>
+                <li>{t("邀请 / 禁用 / 重置成员密码 / 转让 Owner 等管理权限")}</li>
               </ul>
             </div>
             <input
               className="input input-lg"
-              placeholder="公司名称(2-30 字)"
+              placeholder={t("公司名称(2-30 字)")}
               value={upgradeName}
               onChange={(e) => setUpgradeName(e.target.value)}
               maxLength={30}
@@ -232,7 +239,7 @@ export function OrgPage() {
               }
               onClick={() => upgrade.mutate()}
             >
-              {upgrade.isPending ? "升级中…" : "升级为企业账户"}
+              {upgrade.isPending ? t("升级中…") : t("升级为企业账户")}
             </button>
             {upgrade.isError && (
               <div className="dim-2" style={{ color: "oklch(72% .15 25)", fontSize: 12 }}>
@@ -251,7 +258,7 @@ export function OrgPage() {
 
   return (
     <>
-      <AppTopBar crumbs={[{ label: "组织管理" }]} />
+      <AppTopBar crumbs={[{ label: t("组织管理") }]} />
       <div className="char-lib">
         {/* Hero */}
         <div className="char-lib-hero">
@@ -265,7 +272,7 @@ export function OrgPage() {
                 marginBottom: 8,
               }}
             >
-              Organization · 企业 Owner
+              {t("Organization · 企业 Owner")}
             </div>
             {editingName ? (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -286,10 +293,10 @@ export function OrgPage() {
                   }
                   onClick={() => rename.mutate(orgNameDraft.trim())}
                 >
-                  保存
+                  {t("保存")}
                 </button>
                 <button className="btn btn-sm" onClick={() => setEditingName(false)}>
-                  取消
+                  {t("取消")}
                 </button>
               </div>
             ) : (
@@ -302,26 +309,26 @@ export function OrgPage() {
                     setEditingName(true);
                   }}
                 >
-                  改名
+                  {t("改名")}
                 </button>
               </h1>
             )}
             <p className="char-lib-sub">
-              组织内成员共享素材库与角色库。所有成员提交的生成任务都从组织余额扣费。
+              {t("组织内成员共享素材库与角色库。所有成员提交的生成任务都从组织余额扣费。")}
             </p>
           </div>
           <div className="char-lib-stats">
             <div className="stat">
               <div className="stat-n mono">{members.length}</div>
-              <div className="stat-l">当前成员</div>
+              <div className="stat-l">{t("当前成员")}</div>
             </div>
             <div className="stat">
               <div className="stat-n mono">{org?.seat_limit ?? "—"}</div>
-              <div className="stat-l">席位上限</div>
+              <div className="stat-l">{t("席位上限")}</div>
             </div>
             <div className="stat">
               <div className="stat-n mono">{members.filter((m) => m.status === "disabled").length}</div>
-              <div className="stat-l">已禁用</div>
+              <div className="stat-l">{t("已禁用")}</div>
             </div>
           </div>
         </div>
@@ -329,10 +336,10 @@ export function OrgPage() {
         {/* 工具栏 */}
         <div className="char-lib-toolbar">
           <div className="dim-2" style={{ fontSize: 12 }}>
-            {members.length} / {org?.seat_limit ?? "—"} 席位
+            {members.length} / {org?.seat_limit ?? "—"} {t("席位")}
             {org && members.length >= org.seat_limit && (
               <span style={{ marginLeft: 8, color: "oklch(72% .15 60)" }}>
-                · 已满,需要更多席位请联系制影 AI 商务
+                {t("· 已满,需要更多席位请联系制影 AI 商务")}
               </span>
             )}
           </div>
@@ -345,7 +352,7 @@ export function OrgPage() {
               setShowInvite(true);
             }}
           >
-            + 邀请成员
+            {t("+ 邀请成员")}
           </button>
         </div>
 
@@ -369,12 +376,12 @@ export function OrgPage() {
                   textTransform: "uppercase",
                 }}
               >
-                <th style={{ padding: 12, textAlign: "left" }}>成员</th>
-                <th style={{ padding: 12, textAlign: "left" }}>手机</th>
-                <th style={{ padding: 12, textAlign: "left" }}>角色</th>
-                <th style={{ padding: 12, textAlign: "left" }}>状态</th>
-                <th style={{ padding: 12, textAlign: "left" }}>加入时间</th>
-                <th style={{ padding: 12, textAlign: "right" }}>操作</th>
+                <th style={{ padding: 12, textAlign: "left" }}>{t("成员")}</th>
+                <th style={{ padding: 12, textAlign: "left" }}>{t("手机")}</th>
+                <th style={{ padding: 12, textAlign: "left" }}>{t("角色")}</th>
+                <th style={{ padding: 12, textAlign: "left" }}>{t("状态")}</th>
+                <th style={{ padding: 12, textAlign: "left" }}>{t("加入时间")}</th>
+                <th style={{ padding: 12, textAlign: "right" }}>{t("操作")}</th>
               </tr>
             </thead>
             <tbody>
@@ -390,19 +397,19 @@ export function OrgPage() {
                     })
                   }
                   onReset={() => {
-                    if (confirm(`确认重置「${m.name}」的密码?`)) {
+                    if (confirm(tf("确认重置「{name}」的密码?", { name: m.name }))) {
                       resetPwd.mutate(m.user_id);
                     }
                   }}
                   onKick={() => {
-                    if (confirm(`确认踢出「${m.name}」?该成员将变为个人账户,在本组织的数据不带走。`)) {
+                    if (confirm(tf("确认踢出「{name}」?该成员将变为个人账户,在本组织的数据不带走。", { name: m.name }))) {
                       kick.mutate(m.user_id);
                     }
                   }}
                   onTransfer={() => {
                     if (
                       confirm(
-                        `确认转让 Owner 给「${m.name}」?转让后你立即降为 Member,失去管理权限。\n\n此操作单向、无需对方同意。`,
+                        tf("确认转让 Owner 给「{name}」?转让后你立即降为 Member,失去管理权限。\n\n此操作单向、无需对方同意。", { name: m.name }),
                       )
                     ) {
                       transfer.mutate(m.user_id);
@@ -413,7 +420,7 @@ export function OrgPage() {
             </tbody>
           </table>
           {membersQuery.isLoading && (
-            <div className="dim" style={{ padding: 16 }}>加载中…</div>
+            <div className="dim" style={{ padding: 16 }}>{t("加载中…")}</div>
           )}
         </div>
 
@@ -427,9 +434,9 @@ export function OrgPage() {
             background: "oklch(50% .15 25 / 0.05)",
           }}
         >
-          <h2 style={{ marginTop: 0, color: "oklch(72% .15 25)" }}>危险区</h2>
+          <h2 style={{ marginTop: 0, color: "oklch(72% .15 25)" }}>{t("危险区")}</h2>
           <p className="dim-2" style={{ fontSize: 13, lineHeight: 1.6 }}>
-            解散组织 → 所有成员立即转为个人账户;数据保留 30 天可恢复,之后软删除。
+            {t("解散组织 → 所有成员立即转为个人账户;数据保留 30 天可恢复,之后软删除。")}
           </p>
           <button
             className="btn"
@@ -439,18 +446,18 @@ export function OrgPage() {
             }}
             onClick={() => setShowDissolve(true)}
           >
-            解散组织
+            {t("解散组织")}
           </button>
         </section>
       </div>
 
       {/* 邀请弹窗 */}
       {showInvite && (
-        <Modal onClose={() => setShowInvite(false)} title="邀请新成员">
+        <Modal onClose={() => setShowInvite(false)} title={t("邀请新成员")}>
           {revealedPwd ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-                邀请成功!请把以下登录信息转告该成员:
+                {t("邀请成功!请把以下登录信息转告该成员:")}
               </div>
               <div
                 style={{
@@ -462,11 +469,11 @@ export function OrgPage() {
                   fontSize: 13,
                 }}
               >
-                <div>手机号:{invitePhone || "(已发送)"}</div>
-                <div style={{ marginTop: 4 }}>初始密码:<strong>{revealedPwd}</strong></div>
+                <div>{t("手机号:")}{invitePhone || t("(已发送)")}</div>
+                <div style={{ marginTop: 4 }}>{t("初始密码:")}<strong>{revealedPwd}</strong></div>
               </div>
               <div className="dim-2" style={{ fontSize: 11 }}>
-                ⚠️ 本密码只显示一次,关闭后无法再查看。可让该成员登录后立刻修改。
+                {t("⚠️ 本密码只显示一次,关闭后无法再查看。可让该成员登录后立刻修改。")}
               </div>
               <button
                 className="btn btn-primary"
@@ -475,27 +482,27 @@ export function OrgPage() {
                   setShowInvite(false);
                 }}
               >
-                我已记下,关闭
+                {t("我已记下,关闭")}
               </button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <input
                 className="input input-lg"
-                placeholder="手机号(11 位)"
+                placeholder={t("手机号(11 位)")}
                 value={invitePhone}
                 onChange={(e) => setInvitePhone(e.target.value)}
               />
               <input
                 className="input input-lg"
-                placeholder="昵称(选填)"
+                placeholder={t("昵称(选填)")}
                 value={inviteName}
                 onChange={(e) => setInviteName(e.target.value)}
                 maxLength={30}
               />
               <input
                 className="input input-lg"
-                placeholder="初始密码(选填,留空自动生成)"
+                placeholder={t("初始密码(选填,留空自动生成)")}
                 value={invitePwd}
                 onChange={(e) => setInvitePwd(e.target.value)}
               />
@@ -505,13 +512,13 @@ export function OrgPage() {
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button className="btn" onClick={() => setShowInvite(false)}>取消</button>
+                <button className="btn" onClick={() => setShowInvite(false)}>{t("取消")}</button>
                 <button
                   className="btn btn-primary"
                   disabled={!/^1[3-9]\d{9}$/.test(invitePhone) || invite.isPending}
                   onClick={() => invite.mutate()}
                 >
-                  {invite.isPending ? "邀请中…" : "邀请"}
+                  {invite.isPending ? t("邀请中…") : t("邀请")}
                 </button>
               </div>
             </div>
@@ -521,13 +528,13 @@ export function OrgPage() {
 
       {/* 解散确认 */}
       {showDissolve && (
-        <Modal onClose={() => setShowDissolve(false)} title="解散组织 — 确认">
+        <Modal onClose={() => setShowDissolve(false)} title={t("解散组织 — 确认")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <p style={{ fontSize: 13, lineHeight: 1.6, color: "oklch(72% .15 25)" }}>
-              ⚠️ 此操作将立即把所有成员转为个人账户。组织数据保留 30 天后软删除。
+              {t("⚠️ 此操作将立即把所有成员转为个人账户。组织数据保留 30 天后软删除。")}
             </p>
             <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              请输入组织名称 <strong style={{ color: "var(--text)" }}>{org?.name}</strong> 以确认:
+              {t("请输入组织名称")} <strong style={{ color: "var(--text)" }}>{org?.name}</strong> {t("以确认:")}
             </div>
             <input
               className="input input-lg"
@@ -538,7 +545,7 @@ export function OrgPage() {
             />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn" onClick={() => setShowDissolve(false)}>
-                取消
+                {t("取消")}
               </button>
               <button
                 className="btn"
@@ -550,7 +557,7 @@ export function OrgPage() {
                 disabled={dissolveConfirm !== org?.name || dissolve.isPending}
                 onClick={() => dissolve.mutate()}
               >
-                {dissolve.isPending ? "解散中…" : "永久解散"}
+                {dissolve.isPending ? t("解散中…") : t("永久解散")}
               </button>
             </div>
           </div>
@@ -575,6 +582,7 @@ function MemberRow({
   onKick: () => void;
   onTransfer: () => void;
 }) {
+  const t = useT();
   return (
     <tr style={{ borderTop: "1px solid var(--border)" }}>
       <td style={{ padding: 12 }}>
@@ -584,7 +592,7 @@ function MemberRow({
             {member.name}
             {isSelf && (
               <span className="dim-2 mono" style={{ marginLeft: 8, fontSize: 10 }}>
-                我
+                {t("我")}
               </span>
             )}
           </div>
@@ -622,9 +630,9 @@ function MemberRow({
       </td>
       <td style={{ padding: 12 }}>
         {member.status === "active" ? (
-          <span style={{ color: "oklch(70% .15 145)" }}>● 活跃</span>
+          <span style={{ color: "oklch(70% .15 145)" }}>{t("● 活跃")}</span>
         ) : (
-          <span className="dim-2">○ 已禁用</span>
+          <span className="dim-2">{t("○ 已禁用")}</span>
         )}
       </td>
       <td style={{ padding: 12 }} className="dim-2">
@@ -634,26 +642,26 @@ function MemberRow({
         {!isSelf && member.role === "member" && (
           <div style={{ display: "inline-flex", gap: 4 }}>
             <button className="btn btn-ghost btn-sm" onClick={onToggleStatus}>
-              {member.status === "active" ? "禁用" : "启用"}
+              {member.status === "active" ? t("禁用") : t("启用")}
             </button>
             <button className="btn btn-ghost btn-sm" onClick={onReset}>
-              重置密码
+              {t("重置密码")}
             </button>
             <button className="btn btn-ghost btn-sm" onClick={onTransfer}>
-              转让 Owner
+              {t("转让 Owner")}
             </button>
             <button
               className="btn btn-ghost btn-sm"
               style={{ color: "oklch(72% .15 25)" }}
               onClick={onKick}
             >
-              踢出
+              {t("踢出")}
             </button>
           </div>
         )}
         {isSelf && (
           <span className="dim-2" style={{ fontSize: 11 }}>
-            (本人,使用账户中心修改)
+            {t("(本人,使用账户中心修改)")}
           </span>
         )}
       </td>

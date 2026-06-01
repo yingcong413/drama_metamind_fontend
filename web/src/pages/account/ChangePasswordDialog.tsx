@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { CloseIcon } from "@/components/icons";
 import { changePassword } from "@/api/auth";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   onClose: () => void;
 }
 
 export function ChangePasswordDialog({ onClose }: Props) {
+  const t = useT();
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -17,8 +19,8 @@ export function ChangePasswordDialog({ onClose }: Props) {
   const localError =
     !oldPwd ? null
     : !newPwd ? null
-    : newPwd.length < 6 ? "新密码至少 6 位"
-    : confirmPwd && newPwd !== confirmPwd ? "两次密码不一致"
+    : newPwd.length < 6 ? t("新密码至少 6 位")
+    : confirmPwd && newPwd !== confirmPwd ? t("两次密码不一致")
     : null;
   const canSubmit =
     oldPwd && newPwd && confirmPwd && newPwd === confirmPwd && newPwd.length >= 6;
@@ -56,8 +58,8 @@ export function ChangePasswordDialog({ onClose }: Props) {
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div style={{ fontSize: 15, fontWeight: 600 }}>修改密码</div>
-          <button className="btn-ghost btn-icon" onClick={onClose} title="关闭">
+          <div style={{ fontSize: 15, fontWeight: 600 }}>{t("修改密码")}</div>
+          <button className="btn-ghost btn-icon" onClick={onClose} title={t("关闭")}>
             <CloseIcon />
           </button>
         </div>
@@ -65,34 +67,34 @@ export function ChangePasswordDialog({ onClose }: Props) {
         {done ? (
           <div style={{ padding: 28, textAlign: "center" }}>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-              ✓ 密码修改成功
+              {t("✓ 密码修改成功")}
             </div>
             <div className="dim-2" style={{ fontSize: 12, marginBottom: 18 }}>
-              下次登录请使用新密码。
+              {t("下次登录请使用新密码。")}
             </div>
             <button className="btn btn-primary" onClick={onClose}>
-              知道了
+              {t("知道了")}
             </button>
           </div>
         ) : (
           <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
             <Field
-              label="旧密码"
+              label={t("旧密码")}
               value={oldPwd}
               onChange={setOldPwd}
-              placeholder="当前账号密码"
+              placeholder={t("当前账号密码")}
             />
             <Field
-              label="新密码"
+              label={t("新密码")}
               value={newPwd}
               onChange={setNewPwd}
-              placeholder="至少 6 位"
+              placeholder={t("至少 6 位")}
             />
             <Field
-              label="确认新密码"
+              label={t("确认新密码")}
               value={confirmPwd}
               onChange={setConfirmPwd}
-              placeholder="再输一次新密码"
+              placeholder={t("再输一次新密码")}
             />
 
             {(localError || submit.isError) && (
@@ -103,14 +105,14 @@ export function ChangePasswordDialog({ onClose }: Props) {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
               <button className="btn btn-sm" onClick={onClose}>
-                取消
+                {t("取消")}
               </button>
               <button
                 className="btn btn-primary btn-sm"
                 disabled={!canSubmit || submit.isPending}
                 onClick={() => submit.mutate()}
               >
-                {submit.isPending ? "提交中…" : "确认修改"}
+                {submit.isPending ? t("提交中…") : t("确认修改")}
               </button>
             </div>
           </div>

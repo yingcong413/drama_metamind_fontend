@@ -3,6 +3,7 @@ import { FIELD_DEFS } from "@/lib/fieldDefs";
 import { isFilled, isOutputFilled, isShotFilled } from "@/lib/validators";
 import type { Project } from "@/types";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   project: Project;
@@ -22,6 +23,7 @@ interface Props {
 
 export function EditorNav(p: Props) {
   const { project, activeKey, scrollAnchor } = p;
+  const t = useT();
 
   const isGlobalFieldFilled = (id: string, dataLayer: "global" | "output" | undefined) => {
     if (dataLayer === "output") return isOutputFilled(project.output, id);
@@ -31,7 +33,7 @@ export function EditorNav(p: Props) {
   return (
     <aside className="nav">
       <div style={{ padding: "16px 16px 4px" }}>
-        <input className="input" placeholder="跳转到字段…" style={{ padding: "6px 10px", fontSize: 12 }} />
+        <input className="input" placeholder={t("跳转到字段…")} style={{ padding: "6px 10px", fontSize: 12 }} />
       </div>
 
       <div
@@ -40,7 +42,7 @@ export function EditorNav(p: Props) {
       >
         <span className="chev"><ChevronIcon /></span>
         <span className="swatch" />
-        <span>全局场景层</span>
+        <span>{t("全局场景层")}</span>
       </div>
       {!p.globalCollapsed && FIELD_DEFS.global.map((f) => {
         const filled = isGlobalFieldFilled(f.id, f.dataLayer);
@@ -53,7 +55,7 @@ export function EditorNav(p: Props) {
             onClick={() => p.selectGlobal("g-" + f.id)}
           >
             <span className="num">{f.num}</span>
-            <span>{f.title}</span>
+            <span>{t(f.title)}</span>
             {required && !filled
               ? <span className="req" />
               : filled ? <CheckIcon className="icon done" /> : null}
@@ -68,7 +70,7 @@ export function EditorNav(p: Props) {
       >
         <span className="chev"><ChevronIcon /></span>
         <span className="swatch" />
-        <span>分镜层</span>
+        <span>{t("分镜层")}</span>
         <span className="count">×{project.shots.length}</span>
       </div>
       {!p.shotsCollapsed && project.shots.map((s, i) => {
@@ -88,11 +90,11 @@ export function EditorNav(p: Props) {
               >
                 <ChevronIcon />
               </span>
-              <span className="num">分镜 {String(i + 1).padStart(2, "0")}</span>
-              <span className="name">{s.name}</span>
-              <button className="icon-btn" onClick={(e) => { e.stopPropagation(); p.duplicateShot(s.id); }} title="复制"><CopyIcon /></button>
-              <button className="icon-btn" onClick={(e) => e.stopPropagation()} title="拖拽排序"><DragIcon /></button>
-              <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); p.deleteShot(s.id); }} title="删除"><TrashIcon /></button>
+              <span className="num">{t("分镜")} {String(i + 1).padStart(2, "0")}</span>
+              <span className="name">{t(s.name)}</span>
+              <button className="icon-btn" onClick={(e) => { e.stopPropagation(); p.duplicateShot(s.id); }} title={t("复制")}><CopyIcon /></button>
+              <button className="icon-btn" onClick={(e) => e.stopPropagation()} title={t("拖拽排序")}><DragIcon /></button>
+              <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); p.deleteShot(s.id); }} title={t("删除")}><TrashIcon /></button>
             </div>
             {isActiveShot && (
               <div className="tree-group-children">
@@ -108,7 +110,7 @@ export function EditorNav(p: Props) {
                       onClick={() => p.selectShot(s.id, anchor)}
                     >
                       <span className="num">{f.num}</span>
-                      <span>{f.title}</span>
+                      <span>{t(f.title)}</span>
                       {required && !filled
                         ? <span className="req" />
                         : filled ? <CheckIcon className="icon done" /> : null}
@@ -121,7 +123,7 @@ export function EditorNav(p: Props) {
         );
       })}
       <div className="add-shot" onClick={p.addShot}>
-        <PlusIcon /> 添加分镜
+        <PlusIcon /> {t("添加分镜")}
       </div>
       <div style={{ height: 24 }} />
     </aside>

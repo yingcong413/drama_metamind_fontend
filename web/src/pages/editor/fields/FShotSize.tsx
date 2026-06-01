@@ -1,5 +1,6 @@
 import { SHOT_SIZES } from "@/lib/fieldDefs";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 import type { Shot } from "@/types";
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function FShotSize({ value, set }: Props) {
+  const t = useT();
   const cur = value.shot_size;
   return (
     <div className="cam-grid">
@@ -19,7 +21,7 @@ export function FShotSize({ value, set }: Props) {
             className={cn("cam-chip", sel && "selected")}
             onClick={() => set({ ...value, shot_size: sel ? null : s.id })}
           >
-            <span className="cam-chip-cn">{s.cn}</span>
+            <span className="cam-chip-cn">{t(s.cn)}</span>
             <span className="cam-chip-en">{s.en}</span>
           </button>
         );

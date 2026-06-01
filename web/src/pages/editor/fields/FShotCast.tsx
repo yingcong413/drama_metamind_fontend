@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { CheckIcon, SearchIcon } from "@/components/icons";
 import { avatarHue } from "@/lib/avatarHue";
+import { useT } from "@/lib/i18n";
 import type { Character, Shot } from "@/types";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function FShotCast({ value, set, projectChars, characters, onJumpToField5 }: Props) {
+  const t = useT();
   const cast = value.cast_ids ?? [];
   const available = (projectChars ?? [])
     .map((id) => characters.find((c) => c.id === id))
@@ -28,9 +30,9 @@ export function FShotCast({ value, set, projectChars, characters, onJumpToField5
       <div className="empty-cast">
         <div className="empty-cast-icon"><SearchIcon /></div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>本剧还未指定任何角色</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t("本剧还未指定任何角色")}</div>
           <div className="dim" style={{ fontSize: 12 }}>
-            请先在「全局 · 字段 05 · 角色调用」中选择本剧涉及的角色，再回到这里指派本分镜出场角色。
+            {t("请先在「全局 · 字段 05 · 角色调用」中选择本剧涉及的角色，再回到这里指派本分镜出场角色。")}
           </div>
         </div>
         <button
@@ -38,7 +40,7 @@ export function FShotCast({ value, set, projectChars, characters, onJumpToField5
           onClick={onJumpToField5}
           style={{ marginLeft: "auto", flexShrink: 0 }}
         >
-          前往字段 05 →
+          {t("前往字段 05 →")}
         </button>
       </div>
     );
@@ -77,7 +79,7 @@ export function FShotCast({ value, set, projectChars, characters, onJumpToField5
       </div>
       {cast.length === 0 && (
         <div className="dim-2" style={{ fontSize: 11, marginTop: 8, fontFamily: "var(--font-mono)" }}>
-          未选择则视作群像 / 空镜，无具体角色出场
+          {t("未选择则视作群像 / 空镜，无具体角色出场")}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { CheckIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { avatarHue } from "@/lib/avatarHue";
+import { useT, useTf } from "@/lib/i18n";
 import type { Character, GlobalLayer } from "@/types";
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
 }
 
 export function FCharacters({ value, set, characters }: Props) {
+  const t = useT();
+  const tf = useTf();
   const [q, setQ] = useState("");
   const selectedIds = value.characters ?? [];
   const toggle = (id: string) => {
@@ -29,16 +32,16 @@ export function FCharacters({ value, set, characters }: Props) {
         <div className="cast-search">
           <SearchIcon />
           <input
-            placeholder="搜索角色名 / 角色定位 / 描述…"
+            placeholder={t("搜索角色名 / 角色定位 / 描述…")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
         <div className="dim-2 mono" style={{ fontSize: 11 }}>
-          {characters.length} 个角色 · 已选{" "}
+          {tf("{n} 个角色 · 已选", { n: characters.length })}{" "}
           <span style={{ color: "var(--accent)", fontWeight: 600 }}>{selectedCount}</span>
         </div>
-        <button className="btn btn-sm"><PlusIcon /> 新建角色</button>
+        <button className="btn btn-sm"><PlusIcon /> {t("新建角色")}</button>
       </div>
 
       <div className="cast-grid">
@@ -59,13 +62,13 @@ export function FCharacters({ value, set, characters }: Props) {
                 </div>
                 {sel && <div className="cast-card-check"><CheckIcon /></div>}
                 {c.has_ref ? (
-                  <span className="cast-card-ref-flag">参考图</span>
+                  <span className="cast-card-ref-flag">{t("参考图")}</span>
                 ) : (
                   <span
                     className="cast-card-ref-flag"
                     style={{ background: "var(--surface-3)", color: "var(--text-tertiary)" }}
                   >
-                    无参考
+                    {t("无参考")}
                   </span>
                 )}
               </div>
@@ -84,8 +87,8 @@ export function FCharacters({ value, set, characters }: Props) {
       {selectedCount > 0 && (
         <div className="cast-bar">
           <div className="cast-bar-label">
-            <span className="dim-2 mono" style={{ fontSize: 11 }}>本剧出场</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedCount} 个角色</span>
+            <span className="dim-2 mono" style={{ fontSize: 11 }}>{t("本剧出场")}</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{tf("{n} 个角色", { n: selectedCount })}</span>
           </div>
           <div className="cast-bar-list">
             {selectedIds.map((id) => {

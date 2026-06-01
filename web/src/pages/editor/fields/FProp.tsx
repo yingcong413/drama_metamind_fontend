@@ -8,6 +8,7 @@ import { CloseIcon } from "@/components/icons";
 import { Placeholder } from "@/components/primitives/Placeholder";
 import { Upload } from "@/components/primitives/Upload";
 import { filenameFromUrl, isLoadableUrl } from "@/lib/format";
+import { t, useT } from "@/lib/i18n";
 import { uploadGlobalImage } from "@/lib/uploadGlobalImage";
 import type { GlobalLayer } from "@/types";
 
@@ -21,6 +22,7 @@ const isDataUrl = (s: string | null | undefined): boolean =>
   !!s && s.startsWith("data:");
 
 export function FProp({ value, set }: Props) {
+  const tr = useT();
   const url = value.prop_image_url;
   const replaceRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
@@ -38,7 +40,7 @@ export function FProp({ value, set }: Props) {
       set({ ...value, prop_image_url: tosUrl });
     } catch (e) {
       console.error("上传道具图失败", e);
-      alert("上传道具图失败:" + (e instanceof Error ? e.message : String(e)));
+      alert(t("上传道具图失败:") + (e instanceof Error ? e.message : String(e)));
     } finally {
       setPending(false);
     }
@@ -47,14 +49,14 @@ export function FProp({ value, set }: Props) {
   if (!url) {
     return (
       <Upload
-        label={pending ? "正在上传到 TOS…" : "上传道具参考图 · 单张即可"}
+        label={pending ? tr("正在上传到 TOS…") : tr("上传道具参考图 · 单张即可")}
         onSelect={applyFile}
       />
     );
   }
 
   const displayName = isDataUrl(url)
-    ? (fileName ? fileName : "本地上传(老数据 · base64)")
+    ? (fileName ? fileName : tr("本地上传(老数据 · base64)"))
     : filenameFromUrl(url);
   const canRender = isLoadableUrl(url) && !imgBroken;
 
@@ -110,7 +112,7 @@ export function FProp({ value, set }: Props) {
         }}
       />
       <button className="btn-ghost btn-sm" onClick={() => replaceRef.current?.click()}>
-        替换
+        {tr("替换")}
       </button>
       <button
         className="btn-ghost btn-sm"

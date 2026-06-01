@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, TrashIcon } from "@/components/icons";
+import { useT, useTf } from "@/lib/i18n";
 import { formatRelative, formatDuration } from "@/lib/format";
 import { clearLastProjectIfMatch } from "@/lib/lastProject";
 import { deleteProject } from "@/api/projects";
@@ -12,6 +13,8 @@ interface Props {
 }
 
 export function ProjectCard({ project: p }: Props) {
+  const t = useT();
+  const tf = useTf();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -27,7 +30,7 @@ export function ProjectCard({ project: p }: Props) {
       qc.removeQueries({ queryKey: ["project", p.id] });
     },
     onError: (e) => {
-      alert(`删除失败:${(e as Error).message}`);
+      alert(`${t("删除失败")}:${(e as Error).message}`);
     },
   });
 
@@ -50,8 +53,8 @@ export function ProjectCard({ project: p }: Props) {
       {/* 删除按钮:卡片右上角,半透明,hover 时高亮(继承 .proj-card:hover) */}
       <button
         className="btn btn-sm"
-        title="删除项目"
-        aria-label="删除项目"
+        title={t("删除项目")}
+        aria-label={t("删除项目")}
         onClick={onDeleteClick}
         disabled={del.isPending}
         style={{
@@ -76,14 +79,14 @@ export function ProjectCard({ project: p }: Props) {
           background: `linear-gradient(135deg, oklch(35% .10 ${p.hue}), oklch(20% .08 ${(p.hue + 30) % 360}))`,
         }}
       >
-        <span className="badge mono">{p.shot_count} 分镜</span>
+        <span className="badge mono">{tf("{n} 分镜", { n: p.shot_count })}</span>
         <span className={`status ${p.status}`}>
           {p.status === "done" && (
             <>
-              <CheckIcon /> 已生成
+              <CheckIcon /> {t("已生成")}
             </>
           )}
-          {p.status === "draft" && <>草稿</>}
+          {p.status === "draft" && <>{t("草稿")}</>}
           {p.status === "gen" && (
             <>
               <span
@@ -95,7 +98,7 @@ export function ProjectCard({ project: p }: Props) {
                   animation: "pulse 1.2s infinite",
                 }}
               />{" "}
-              生成中
+              {t("生成中")}
             </>
           )}
         </span>
@@ -115,7 +118,7 @@ export function ProjectCard({ project: p }: Props) {
         </div>
       </div>
       <div className="proj-meta">
-        <div className="name">{p.name}</div>
+        <div className="name">{t(p.name)}</div>
         <div className="row">
           <span>{formatDuration(p.duration_seconds)}</span>
           <span>{formatRelative(p.updated_at)}</span>
@@ -144,11 +147,11 @@ export function ProjectCard({ project: p }: Props) {
           }}
         >
           <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-            确定删除项目<br />
-            <strong>「{p.name}」</strong>?
+            {t("确定删除项目")}<br />
+            <strong>「{t(p.name)}」</strong>?
             <br />
             <span className="dim-2" style={{ fontSize: 12 }}>
-              该操作不可撤销
+              {t("该操作不可撤销")}
             </span>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -157,7 +160,7 @@ export function ProjectCard({ project: p }: Props) {
               onClick={onCancel}
               disabled={del.isPending}
             >
-              取消
+              {t("取消")}
             </button>
             <button
               className="btn btn-sm"
@@ -169,7 +172,7 @@ export function ProjectCard({ project: p }: Props) {
                 borderColor: "transparent",
               }}
             >
-              {del.isPending ? "删除中…" : "确认删除"}
+              {del.isPending ? t("删除中…") : t("确认删除")}
             </button>
           </div>
         </div>

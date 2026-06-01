@@ -1,4 +1,5 @@
 import { StrengthSlider } from "@/components/primitives/StrengthSlider";
+import { useT } from "@/lib/i18n";
 import type { MicroBlock, Shot } from "@/types";
 
 interface Props {
@@ -13,6 +14,7 @@ const ROWS: Array<{ k: keyof MicroBlock; label: string; ph: string }> = [
 ];
 
 export function FMicro({ value, set }: Props) {
+  const t = useT();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="field-row-3">
@@ -25,11 +27,11 @@ export function FMicro({ value, set }: Props) {
               fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em",
             }}
           >
-            {r.label}
+            {t(r.label)}
           </div>
           <input
             className="input"
-            placeholder={r.ph}
+            placeholder={t(r.ph)}
             value={value.micro?.[r.k] ?? ""}
             onChange={(e) => set({ ...value, micro: { ...value.micro, [r.k]: e.target.value } })}
           />
@@ -37,7 +39,7 @@ export function FMicro({ value, set }: Props) {
       ))}
       </div>
       <StrengthSlider
-        label="微表情强度"
+        label={t("微表情强度")}
         value={value.micro_strength}
         onChange={(v) => set({ ...value, micro_strength: v })}
       />

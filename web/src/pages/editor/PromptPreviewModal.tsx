@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CloseIcon, CopyIcon } from "@/components/icons";
+import { useT, useTf } from "@/lib/i18n";
 import { buildPromptText } from "@/lib/naturalLanguage";
 import type { Character, Project } from "@/types";
 
@@ -10,6 +11,8 @@ interface Props {
 }
 
 export function PromptPreviewModal({ project, characters, onClose }: Props) {
+  const t = useT();
+  const tf = useTf();
   // 与生成视频弹窗共用同一份拼接逻辑(lib/naturalLanguage.ts 的 buildPromptText)
   const text = useMemo(
     () => buildPromptText(project, characters),
@@ -63,13 +66,13 @@ export function PromptPreviewModal({ project, characters, onClose }: Props) {
         >
           <div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>
-              提示词预览 · {project.name}
+              {tf("提示词预览 · {name}", { name: project.name })}
             </div>
             <div className="dim" style={{ fontSize: 12, marginTop: 2 }}>
-              保存到后端前请检查内容是否符合预期 · 共 {text.length} 字
+              {tf("保存到后端前请检查内容是否符合预期 · 共 {n} 字", { n: text.length })}
             </div>
           </div>
-          <button className="btn-ghost btn-icon" onClick={onClose} title="关闭">
+          <button className="btn-ghost btn-icon" onClick={onClose} title={t("关闭")}>
             <CloseIcon />
           </button>
         </div>
@@ -104,10 +107,10 @@ export function PromptPreviewModal({ project, characters, onClose }: Props) {
           }}
         >
           <button className="btn btn-sm" onClick={copy}>
-            <CopyIcon /> {copied ? "已复制" : "复制全部"}
+            <CopyIcon /> {copied ? t("已复制") : t("复制全部")}
           </button>
           <button className="btn-primary btn btn-sm" onClick={onClose}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       </div>

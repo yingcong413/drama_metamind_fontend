@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n";
 import type { GlobalLayer, VideoRatio } from "@/types";
 
 interface Props {
@@ -21,6 +22,7 @@ const RATIOS: RatioMeta[] = [
 ];
 
 export function FRatio({ value, set }: Props) {
+  const t = useT();
   // null 视作默认 16:9
   const cur = value.ratio ?? "16:9";
   return (
@@ -54,7 +56,7 @@ export function FRatio({ value, set }: Props) {
                 }}
               />
               <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 13, lineHeight: 1.2 }}>{r.cn}</span>
+                <span style={{ fontSize: 13, lineHeight: 1.2 }}>{t(r.cn)}</span>
                 <span className="mono dim-2" style={{ fontSize: 10, lineHeight: 1.4 }}>{r.id}</span>
               </span>
             </button>
@@ -62,7 +64,7 @@ export function FRatio({ value, set }: Props) {
         })}
       </div>
       <div className="dim-2" style={{ fontSize: 11, lineHeight: 1.5 }}>
-        Seedance 2.0 接口仅支持以上 4 档比例,默认 16:9。竖屏(9:16)更容易触发字幕生成。
+        {t("Seedance 2.0 接口仅支持以上 4 档比例,默认 16:9。竖屏(9:16)更容易触发字幕生成。")}
       </div>
     </div>
   );

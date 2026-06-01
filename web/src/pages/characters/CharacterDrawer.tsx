@@ -13,6 +13,7 @@ import {
 } from "@/lib/naturalLanguage";
 import type { Asset, Character } from "@/types";
 import { SingleAssetSlot, MultiAssetGrid } from "./AssetSection";
+import { useT, useTf } from "@/lib/i18n";
 
 const TAG_OPTIONS = ["女主", "男主", "配角", "路人", "都市", "校园", "成熟", "少年", "古风"];
 
@@ -23,6 +24,8 @@ interface Props {
 }
 
 export function CharacterDrawer({ character, isNew, onClose }: Props) {
+  const t = useT();
+  const tf = useTf();
   const qc = useQueryClient();
   const [name, setName] = useState(character?.name ?? "");
   const [role, setRole] = useState(character?.role ?? "");
@@ -129,7 +132,7 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
       <div className="drawer">
         <div className="drawer-head">
           <Avatar name={name || "?"} size="lg" />
-          <h2>{isNew ? "新建角色" : `编辑 · ${character?.name}`}</h2>
+          <h2>{isNew ? t("新建角色") : tf("编辑 · {name}", { name: character?.name ?? "" })}</h2>
           <button className="btn-ghost btn-icon" onClick={onClose}>
             <CloseIcon />
           </button>
@@ -137,13 +140,13 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
         <div className="drawer-body">
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <Field
-              title="角色名"
+              title={t("角色名")}
               tags={["req"]}
-              help="作为索引，在字段 05/14/15 中通过此名调用。建议简洁、可识别。"
+              help={t("作为索引，在字段 05/14/15 中通过此名调用。建议简洁、可识别。")}
             >
               <input
                 className="input input-lg"
-                placeholder="如：林夏"
+                placeholder={t("如：林夏")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
@@ -151,32 +154,32 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
             </Field>
 
             <Field
-              title="角色定位"
+              title={t("角色定位")}
               tags={["opt"]}
-              help="女主 / 男主 / 配角 / 路人 等，用于角色库筛选。"
+              help={t("女主 / 男主 / 配角 / 路人 等，用于角色库筛选。")}
             >
               <input
                 className="input input-lg"
-                placeholder="如：女主"
+                placeholder={t("如：女主")}
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
               />
             </Field>
 
             <Field
-              title="角色描述"
+              title={t("角色描述")}
               tags={["opt"]}
-              help="年龄、外貌、性格、典型穿搭等。模型会在生成时参考。"
+              help={t("年龄、外貌、性格、典型穿搭等。模型会在生成时参考。")}
             >
               <textarea
                 className="textarea textarea-lg"
-                placeholder="如：25岁都市白领，独立坚韧，常穿米色风衣，齐耳短发……"
+                placeholder={t("如：25岁都市白领，独立坚韧，常穿米色风衣，齐耳短发……")}
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
               />
             </Field>
 
-            <Field title="标签" tags={["opt"]} help="用于角色库筛选与搜索。">
+            <Field title={t("标签")} tags={["opt"]} help={t("用于角色库筛选与搜索。")}>
               <ChipSelect multi options={TAG_OPTIONS} value={tags} onChange={setTags} />
             </Field>
 
@@ -184,9 +187,9 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
             {!isNew && character ? (
               <>
                 <Field
-                  title="主图"
+                  title={t("主图")}
                   tags={["opt", "upload"]}
-                  help="单张正面参考图，作为角色头像与默认引用。30MB 内、宽高比 0.4~2.5。"
+                  help={t("单张正面参考图，作为角色头像与默认引用。30MB 内、宽高比 0.4~2.5。")}
                 >
                   <SingleAssetSlot
                     asset={primaryImage}
@@ -198,9 +201,9 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
                 </Field>
 
                 <Field
-                  title="多角度图"
+                  title={t("多角度图")}
                   tags={["opt", "upload"]}
-                  help="侧面 / 背面 / 全身 / 表情等补充参考。可在主图失败时手动指定其中一张为主图。"
+                  help={t("侧面 / 背面 / 全身 / 表情等补充参考。可在主图失败时手动指定其中一张为主图。")}
                 >
                   <MultiAssetGrid
                     assets={otherImages}
@@ -211,9 +214,9 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
                 </Field>
 
                 <Field
-                  title="声线参考"
+                  title={t("声线参考")}
                   tags={["opt", "audio"]}
-                  help="一段 2~15 秒的角色样音（mp3 / wav，≤15MB）。用于台词与独白生成时的音色参考。"
+                  help={t("一段 2~15 秒的角色样音（mp3 / wav，≤15MB）。用于台词与独白生成时的音色参考。")}
                 >
                   <SingleAssetSlot
                     asset={primaryAudio}
@@ -225,7 +228,7 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
                 </Field>
               </>
             ) : (
-              <Field title="素材" tags={["opt"]} help="新建角色保存后，再回到这里上传素材。">
+              <Field title={t("素材")} tags={["opt"]} help={t("新建角色保存后，再回到这里上传素材。")}>
                 <div
                   style={{
                     padding: "12px 14px",
@@ -235,7 +238,7 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
                     color: "var(--text-muted, #6B7280)",
                   }}
                 >
-                  保存角色后会创建对应火山方舟 AssetGroup，再在此上传主图 / 多图 / 声线。
+                  {t("保存角色后会创建对应火山方舟 AssetGroup，再在此上传主图 / 多图 / 声线。")}
                 </div>
               </Field>
             )}
@@ -243,19 +246,19 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
             {/* ─── API 引用预览(只有已存在的角色才显示,新建时还没素材) ─── */}
             {!isNew && character && (
               <Field
-                title="API 引用预览"
+                title={t("API 引用预览")}
                 tags={["opt"]}
-                help="项目调用该角色时,最终发到 Seedance 的 URL。同时展示 SeeGen asset:// 引用 + TOS 原始 URL,便于验证。"
+                help={t("项目调用该角色时,最终发到 Seedance 的 URL。同时展示 SeeGen asset:// 引用 + TOS 原始 URL,便于验证。")}
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <RefBlock
-                    label="主图"
+                    label={t("主图")}
                     arkAssetId={primaryImage?.ark_asset_id ?? null}
                     tosUrl={primaryImage?.url ?? null}
                     legacyUrl={character.ref_image_url ?? null}
                   />
                   <RefBlock
-                    label="声线"
+                    label={t("声线")}
                     arkAssetId={primaryAudio?.ark_asset_id ?? null}
                     tosUrl={primaryAudio?.url ?? null}
                     legacyUrl={character.voice_sample_url ?? null}
@@ -264,10 +267,7 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
                     className="dim-2"
                     style={{ fontSize: 11, lineHeight: 1.6, marginTop: 2 }}
                   >
-                    生成时优先用 <code>asset://{"{ark_asset_id}"}</code>(Seedance 走方舟侧 fetch,最稳);
-                    上面同时展示 TOS 原始 URL,你可以点开链接在浏览器自检——如果 TOS URL 打不开
-                    (403/404),说明素材实际私有,Seedance 也会拉不到,需要检查 TOS 桶策略。
-                    显示 <strong style={{ color: "oklch(72% .15 25)" }}>未上传</strong> 时该角色在 prompt 里不会绑定 <code>@图片N</code>。
+                    {t("生成时优先用")} <code>asset://{"{ark_asset_id}"}</code>{t("(Seedance 走方舟侧 fetch,最稳); 上面同时展示 TOS 原始 URL,你可以点开链接在浏览器自检——如果 TOS URL 打不开 (403/404),说明素材实际私有,Seedance 也会拉不到,需要检查 TOS 桶策略。 显示")} <strong style={{ color: "oklch(72% .15 25)" }}>{t("未上传")}</strong> {t("时该角色在 prompt 里不会绑定")} <code>@图片N</code>。
                     {/* 引用一下 apiImageRef / apiAudioRef 保留对内部逻辑的连接(避免未使用变量警告) */}
                     {apiImageRef === null && apiAudioRef === null ? "" : ""}
                   </div>
@@ -278,14 +278,14 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
         </div>
         <div className="drawer-foot">
           <button className="btn" onClick={onClose} disabled={pending}>
-            取消
+            {t("取消")}
           </button>
           <button
             className="btn btn-primary"
             onClick={submit}
             disabled={pending || !name.trim()}
           >
-            {pending ? "保存中…" : isNew ? "创建" : "保存"}
+            {pending ? t("保存中…") : isNew ? t("创建") : t("保存")}
           </button>
         </div>
       </div>
@@ -311,6 +311,7 @@ function RefBlock({
   tosUrl: string | null;
   legacyUrl: string | null;
 }) {
+  const t = useT();
   const assetUri = arkAssetId ? `asset://${arkAssetId}` : null;
   const allMissing = !assetUri && !tosUrl && !legacyUrl;
   return (
@@ -338,14 +339,14 @@ function RefBlock({
             fontFamily: "var(--font-mono), monospace",
           }}
         >
-          未上传 — 该角色不会作为参考素材发到 API
+          {t("未上传 — 该角色不会作为参考素材发到 API")}
         </code>
       ) : (
         <>
-          <RefLine kind="API" value={assetUri} hint="asset://{ark_asset_id} · 发给 Seedance 的优先引用" />
-          <RefLine kind="TOS" value={tosUrl} link hint="TOS 原始 URL · 点开可自检公网可读" />
+          <RefLine kind="API" value={assetUri} hint={t("asset://{ark_asset_id} · 发给 Seedance 的优先引用")} />
+          <RefLine kind="TOS" value={tosUrl} link hint={t("TOS 原始 URL · 点开可自检公网可读")} />
           {legacyUrl && !tosUrl && !assetUri && (
-            <RefLine kind="LEG" value={legacyUrl} link hint="legacy 字段,迁移期保留" />
+            <RefLine kind="LEG" value={legacyUrl} link hint={t("legacy 字段,迁移期保留")} />
           )}
         </>
       )}
@@ -365,6 +366,8 @@ function RefLine({
   /** true → 当 value 是 http(s):// 时渲染成可点击链接(新标签打开) */
   link?: boolean;
 }) {
+  const t = useT();
+  const tf = useTf();
   const [copied, setCopied] = useState(false);
   const isMissing = !value;
   const isHttp = !!value && /^https?:\/\//i.test(value);
@@ -409,7 +412,7 @@ function RefLine({
             fontFamily: "var(--font-mono), monospace",
           }}
         >
-          {kind === "API" ? "未注册到 SeeGen" : "无 TOS URL"}
+          {kind === "API" ? t("未注册到 SeeGen") : t("无 TOS URL")}
         </code>
       ) : (
         <>
@@ -431,7 +434,7 @@ function RefLine({
                 wordBreak: "break-all",
                 lineHeight: 1.5,
               }}
-              title={hint ? `${hint} · 点击新标签打开` : "点击新标签打开"}
+              title={hint ? tf("{hint} · 点击新标签打开", { hint }) : t("点击新标签打开")}
             >
               {value} ↗
             </a>
@@ -457,14 +460,14 @@ function RefLine({
           <button
             className="btn-ghost btn-sm"
             onClick={() => onCopy(value)}
-            title="复制"
+            title={t("复制")}
             style={{
               padding: "0 8px",
               fontSize: 10,
               flexShrink: 0,
             }}
           >
-            {copied ? "✓" : "复制"}
+            {copied ? "✓" : t("复制")}
           </button>
         </>
       )}

@@ -1,5 +1,6 @@
 import { CheckIcon } from "@/components/icons";
 import { formatDateTime, formatYuanInt } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import type { RechargeRecord } from "@/types";
 
 interface Props {
@@ -7,14 +8,15 @@ interface Props {
 }
 
 export function RechargesTable({ records }: Props) {
+  const t = useT();
   return (
     <div className="tasks-table-wrap">
       <div className="recharges-table">
         <div className="recharges-thead">
-          <div>时间</div>
-          <div>支付方式</div>
-          <div>充值金额</div>
-          <div>状态</div>
+          <div>{t("时间")}</div>
+          <div>{t("支付方式")}</div>
+          <div>{t("充值金额")}</div>
+          <div>{t("状态")}</div>
           <div />
         </div>
         {records.map((r) => (
@@ -26,11 +28,11 @@ export function RechargesTable({ records }: Props) {
             </div>
             <div>
               <span className="status-badge success">
-                <CheckIcon /> 成功
+                <CheckIcon /> {t("成功")}
               </span>
             </div>
             <div>
-              <button className="btn-link">下载发票</button>
+              <button className="btn-link">{t("下载发票")}</button>
             </div>
           </div>
         ))}

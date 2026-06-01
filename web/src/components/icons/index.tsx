@@ -106,3 +106,9 @@ export const SaveIcon = (p: IconProps) => (
     <path d="M5 2.5v3h5v-3M5 13v-4h6v4" stroke="currentColor" strokeWidth="1.3" />
   </svg>
 );
+export const GlobeIcon = (p: IconProps) => (
+  <svg {...wrap(p)}>
+    <circle cx="8" cy="8" r="6.2" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M1.8 8h12.4M8 1.8c1.9 2 1.9 10.4 0 12.4M8 1.8c-1.9 2-1.9 10.4 0 12.4" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+);

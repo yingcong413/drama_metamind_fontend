@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 import type { OutputLayer } from "@/types";
 
 interface Props {
@@ -7,13 +8,14 @@ interface Props {
 }
 
 export function FSubtitle({ value, set }: Props) {
+  const t = useT();
   return (
     <div className="segmented" style={{ alignSelf: "flex-start" }}>
       <button className={cn(!value.subtitle && "active")} onClick={() => set({ ...value, subtitle: false })}>
-        不要（默认）
+        {t("不要（默认）")}
       </button>
       <button className={cn(value.subtitle && "active")} onClick={() => set({ ...value, subtitle: true })}>
-        要
+        {t("要")}
       </button>
     </div>
   );

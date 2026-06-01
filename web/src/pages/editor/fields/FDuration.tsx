@@ -1,3 +1,4 @@
+import { useTf } from "@/lib/i18n";
 import type { GlobalLayer } from "@/types";
 
 interface Props {
@@ -12,6 +13,7 @@ const MAX_SECONDS = 15;
 const DEFAULT_SECONDS = 5;
 
 export function FDuration({ value, set }: Props) {
+  const tf = useTf();
   const cur = value.total_duration_seconds ?? DEFAULT_SECONDS;
   const clamped = Math.max(MIN_SECONDS, Math.min(MAX_SECONDS, cur));
 
@@ -57,11 +59,11 @@ export function FDuration({ value, set }: Props) {
             textAlign: "right",
           }}
         >
-          {clamped} 秒
+          {tf("{n} 秒", { n: clamped })}
         </span>
       </div>
       <div className="dim-2" style={{ fontSize: 12, lineHeight: 1.5 }}>
-        全片时长 {clamped} 秒,该数值会直接写入提示词与 Seedance 请求。
+        {tf("全片时长 {n} 秒,该数值会直接写入提示词与 Seedance 请求。", { n: clamped })}
       </div>
     </div>
   );

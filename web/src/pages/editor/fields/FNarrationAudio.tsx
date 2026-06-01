@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { CloseIcon, PlayIcon, UploadIcon } from "@/components/icons";
 import { filenameFromUrl } from "@/lib/format";
+import { t, useT } from "@/lib/i18n";
 import { uploadGlobalAudio } from "@/lib/uploadGlobalImage";
 import type { GlobalLayer } from "@/types";
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function FNarrationAudio({ value, set }: Props) {
+  const tr = useT();
   const url = value.narration_audio_url;
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
@@ -23,7 +25,7 @@ export function FNarrationAudio({ value, set }: Props) {
       set({ ...value, narration_audio_url: tosUrl });
     } catch (e) {
       console.error("上传旁白音频失败", e);
-      alert("上传旁白音频失败:" + (e instanceof Error ? e.message : String(e)));
+      alert(t("上传旁白音频失败:") + (e instanceof Error ? e.message : String(e)));
     } finally {
       setPending(false);
     }
@@ -68,11 +70,11 @@ export function FNarrationAudio({ value, set }: Props) {
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}
         >
-          {filenameFromUrl(url, "本地上传音频") || url}
+          {filenameFromUrl(url, tr("本地上传音频")) || url}
         </div>
         <span className="dim-2 mono" style={{ fontSize: 10 }}>00:00</span>
         <button className="btn-ghost btn-sm" onClick={pickFile} disabled={pending}>
-          {pending ? "上传中…" : "替换"}
+          {pending ? tr("上传中…") : tr("替换")}
         </button>
         <button
           className="btn-ghost btn-sm"
@@ -101,7 +103,7 @@ export function FNarrationAudio({ value, set }: Props) {
         disabled={pending}
       >
         <UploadIcon />{" "}
-        {pending ? "正在上传到 TOS…" : "上传或拖拽旁白音频 · 支持 mp3 / wav / m4a"}
+        {pending ? tr("正在上传到 TOS…") : tr("上传或拖拽旁白音频 · 支持 mp3 / wav / m4a")}
       </button>
     </>
   );

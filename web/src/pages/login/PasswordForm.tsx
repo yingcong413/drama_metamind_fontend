@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EyeIcon } from "@/components/icons";
 import { Field } from "@/components/primitives/Field";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   account: string;
@@ -12,26 +13,27 @@ interface Props {
 }
 
 export function PasswordForm({ account, setAccount, password, setPassword, remember, setRemember }: Props) {
+  const t = useT();
   const [showPwd, setShowPwd] = useState(false);
 
   const onForgot = () => {
     alert(
-      "密码找回功能暂未开放\n\n测试期请联系管理员重置,或改用「手机验证码登录」。",
+      t("密码找回功能暂未开放\n\n测试期请联系管理员重置,或改用「手机验证码登录」。"),
     );
   };
 
   return (
     <>
-      <Field title="账号">
+      <Field title={t("账号")}>
         <input
           className="input input-lg"
-          placeholder="手机号 / 邮箱 / 账号"
+          placeholder={t("手机号 / 邮箱 / 账号")}
           autoComplete="username"
           value={account}
           onChange={(e) => setAccount(e.target.value)}
         />
       </Field>
-      <Field title="密码">
+      <Field title={t("密码")}>
         <div style={{ position: "relative" }}>
           <input
             className="input input-lg"
@@ -45,7 +47,7 @@ export function PasswordForm({ account, setAccount, password, setPassword, remem
           <button
             type="button"
             onClick={() => setShowPwd((v) => !v)}
-            title={showPwd ? "隐藏密码" : "显示密码"}
+            title={showPwd ? t("隐藏密码") : t("显示密码")}
             style={{
               position: "absolute",
               right: 10,
@@ -79,7 +81,7 @@ export function PasswordForm({ account, setAccount, password, setPassword, remem
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
           />{" "}
-          7 天内自动登录
+          {t("7 天内自动登录")}
         </label>
         <button
           type="button"
@@ -87,7 +89,7 @@ export function PasswordForm({ account, setAccount, password, setPassword, remem
           style={{ padding: 0 }}
           onClick={onForgot}
         >
-          忘记密码？
+          {t("忘记密码？")}
         </button>
       </div>
     </>

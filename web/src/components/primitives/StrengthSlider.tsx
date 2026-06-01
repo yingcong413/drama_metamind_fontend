@@ -1,3 +1,5 @@
+import { useT } from "@/lib/i18n";
+
 interface Props {
   value: number;
   onChange: (v: number) => void;
@@ -8,9 +10,12 @@ interface Props {
 export function StrengthSlider({
   value,
   onChange,
-  label = "强度",
-  hint = "建议 60% – 70%",
+  label,
+  hint,
 }: Props) {
+  const t = useT();
+  const labelText = label ?? t("强度");
+  const hintText = hint ?? t("建议 60% – 70%");
   return (
     <div className="strength">
       <div className="strength-head">
@@ -21,7 +26,7 @@ export function StrengthSlider({
             fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em",
           }}
         >
-          {label}
+          {labelText}
         </span>
         <span className="strength-val mono">{value}%</span>
       </div>
@@ -35,9 +40,9 @@ export function StrengthSlider({
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ["--pct" as string]: `${value}%` }}
       />
-      {hint && (
+      {hintText && (
         <div className="dim-2" style={{ fontSize: 11, marginTop: 6 }}>
-          {hint}
+          {hintText}
         </div>
       )}
     </div>

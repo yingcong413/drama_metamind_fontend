@@ -5,6 +5,7 @@ import {
   type CameraMoveMeta,
 } from "@/lib/fieldDefs";
 import { cn } from "@/lib/cn";
+import { useT, useTf } from "@/lib/i18n";
 import type { CameraMove, CameraMoveId, Shot } from "@/types";
 
 interface Props {
@@ -23,6 +24,8 @@ function findMoveMeta(id: string): (CameraMoveMeta & { tier: Tier }) | null {
 }
 
 export function FCamera({ value, set }: Props) {
+  const t = useT();
+  const tf = useTf();
   const moves = value.camera ?? [];
   const selectedIds = new Set(moves.map((m) => m.id));
 
@@ -48,9 +51,9 @@ export function FCamera({ value, set }: Props) {
       {(Object.keys(CAMERA_MOVES) as Tier[]).map((tier) => (
         <div key={tier}>
           <div className="cam-tier-head">
-            <span>{CAMERA_TIER_LABEL[tier]}</span>
+            <span>{t(CAMERA_TIER_LABEL[tier])}</span>
             <span className="dim-2 mono" style={{ fontSize: 10 }}>
-              {CAMERA_MOVES[tier].length} 种
+              {tf("{n} 种", { n: CAMERA_MOVES[tier].length })}
             </span>
           </div>
           <div className="cam-grid">
@@ -62,7 +65,7 @@ export function FCamera({ value, set }: Props) {
                   className={cn("cam-chip", sel && "selected", `tier-${tier}`)}
                   onClick={() => toggle(m.id as CameraMoveId)}
                 >
-                  <span className="cam-chip-cn">{m.cn}</span>
+                  <span className="cam-chip-cn">{t(m.cn)}</span>
                   <span className="cam-chip-en">{m.en}</span>
                 </button>
               );
@@ -80,7 +83,7 @@ export function FCamera({ value, set }: Props) {
               textTransform: "uppercase", marginBottom: 10,
             }}
           >
-已选运镜 · 调整参数
+{t("已选运镜 · 调整参数")}
           </div>
           {moves.map((m) => {
             const meta = findMoveMeta(m.id);
@@ -89,7 +92,7 @@ export function FCamera({ value, set }: Props) {
               <div key={m.id} className="cam-param-row">
                 <div className="cam-param-name">
                   <span className={`cam-chip-dot tier-${meta.tier}`} />
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{meta.cn}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{t(meta.cn)}</span>
                   <span className="dim-2 mono" style={{ fontSize: 10 }}>{meta.en}</span>
                   <button
                     className="btn-ghost btn-sm"
@@ -101,7 +104,7 @@ export function FCamera({ value, set }: Props) {
                 </div>
                 <div className="cam-param-controls">
                   <div className="cam-param-group">
-                    <span className="cam-param-label">速度</span>
+                    <span className="cam-param-label">{t("速度")}</span>
                     <div className="segmented">
                       {SPEED_OPTS.map((o) => (
                         <button
@@ -109,13 +112,13 @@ export function FCamera({ value, set }: Props) {
                           className={cn(m.speed === o && "active")}
                           onClick={() => updateMove(m.id, { speed: o })}
                         >
-                          {o}
+                          {t(o)}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="cam-param-group">
-                    <span className="cam-param-label">幅度</span>
+                    <span className="cam-param-label">{t("幅度")}</span>
                     <div className="segmented">
                       {MAGNITUDE_OPTS.map((o) => (
                         <button
@@ -123,14 +126,14 @@ export function FCamera({ value, set }: Props) {
                           className={cn(m.magnitude === o && "active")}
                           onClick={() => updateMove(m.id, { magnitude: o })}
                         >
-                          {o}
+                          {t(o)}
                         </button>
                       ))}
                     </div>
                   </div>
                   {meta.needsDir && (
                     <div className="cam-param-group">
-                      <span className="cam-param-label">方向</span>
+                      <span className="cam-param-label">{t("方向")}</span>
                       <div className="segmented">
                         {DIR_OPTS.map((o) => (
                           <button
@@ -138,7 +141,7 @@ export function FCamera({ value, set }: Props) {
                             className={cn(m.direction === o && "active")}
                             onClick={() => updateMove(m.id, { direction: o })}
                           >
-                            {o}
+                            {t(o)}
                           </button>
                         ))}
                       </div>

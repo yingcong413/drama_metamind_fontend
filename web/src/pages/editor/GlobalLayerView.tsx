@@ -1,6 +1,7 @@
 import { Tag } from "@/components/primitives/Tag";
 import { LayerChip } from "@/components/primitives/LayerChip";
 import { FIELD_DEFS, MODULE_HELPS } from "@/lib/fieldDefs";
+import { useT } from "@/lib/i18n";
 import type { Character, GlobalLayer, OutputLayer } from "@/types";
 import { FScene } from "./fields/FScene";
 import { FPosition } from "./fields/FPosition";
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function GlobalLayerView({ global, setGlobal, output, setOutput, characters }: Props) {
+  const t = useT();
   const renderField = (id: string) => {
     const g = { value: global, set: setGlobal };
     const o = { value: output, set: setOutput };
@@ -55,9 +57,9 @@ export function GlobalLayerView({ global, setGlobal, output, setOutput, characte
         <div className="layer-header-row">
           <LayerChip layer="global" />
         </div>
-        <h1>填一次，贯穿整支视频</h1>
+        <h1>{t("填一次，贯穿整支视频")}</h1>
         <div className="dim" style={{ fontSize: 13, marginTop: 4 }}>
-          这里的设置作用于整个片段。完成后再编辑下方的分镜，场景、角色、字幕、背景音乐等不需要在每个分镜重复填写。
+          {t("这里的设置作用于整个片段。完成后再编辑下方的分镜，场景、角色、字幕、背景音乐等不需要在每个分镜重复填写。")}
         </div>
       </div>
 
@@ -72,10 +74,10 @@ export function GlobalLayerView({ global, setGlobal, output, setOutput, characte
               <span className="num-badge global">{f.num}</span>
               <div style={{ flex: 1 }}>
                 <h2>
-                  {f.title}
+                  {t(f.title)}
                   {f.tags.includes("req") && <span className="dot-req" style={{ marginLeft: 8 }} />}
                 </h2>
-                <div className="sub">{MODULE_HELPS["g." + f.id]}</div>
+                <div className="sub">{t(MODULE_HELPS["g." + f.id])}</div>
               </div>
               <div className="layer-section-tags">
                 {f.tags.map((t, i) => <Tag key={i} kind={t} />)}
