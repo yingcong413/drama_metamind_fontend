@@ -1,3 +1,17 @@
+/**
+ * 角色变体(v0.9.x §角色变体):同一角色的不同造型/形态。
+ * 每个变体自带名字、描述、主图、多角度图与声音参考,存在角色记录上。
+ * 图片 / 音频字段是 http(s):// URL 或 base64 data: URL(mock 回退)。
+ */
+export interface CharacterVariant {
+  id: string;
+  name: string;
+  desc: string;
+  image_url: string | null;
+  angle_images: string[];
+  voice_url: string | null;
+}
+
 export interface Character {
   id: string;
   /** 所属组织（v0.5 新增，模块二 / §2.2） */
@@ -41,6 +55,10 @@ export interface Character {
 
   hue: number;
   has_ref: boolean;
+  /** 是否启用「角色变体」。开启后用 variants 管理多套造型,关闭则用上面的单套素材。 */
+  has_variants?: boolean;
+  /** 角色变体列表(has_variants 为 true 时生效)。 */
+  variants?: CharacterVariant[];
   created_at: string;
   updated_at: string;
 }

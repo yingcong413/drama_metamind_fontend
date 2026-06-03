@@ -8,6 +8,7 @@ import { isRTL, t } from "@/lib/i18n";
 import { useAuthStore } from "@/stores/auth";
 import { USE_MOCK, USE_REAL_AUTH } from "@/api/client";
 import { loginPhone } from "@/api/auth";
+import { Lightbox } from "@/components/primitives/Lightbox";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,6 +101,7 @@ export function App() {
         </div>
         <IcpFooter />
       </div>
+      <Lightbox />
     </QueryClientProvider>
   );
 }

@@ -29,7 +29,7 @@ export interface GenerationTask {
   end_time: string | null;
   duration_seconds: number;
   video_len_seconds: number;
-  resolution: "720p" | "1080p" | "4k";
+  resolution: "480p" | "720p" | "1080p" | "4k";
   cost_cents: number;
   /** v0.9.1 §10.8.2 token 用量(成功任务,来自 new-api usage.prompt_tokens) */
   input_tokens?: number;

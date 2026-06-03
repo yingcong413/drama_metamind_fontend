@@ -14,6 +14,7 @@ interface ResMeta {
 
 // 与任务表 GenerationTask.resolution 一致。
 const RESOLUTIONS: ResMeta[] = [
+  { id: "480p",  cn: "480p", hint: "流畅 · 生成最快 · 最省积分" },
   { id: "720p",  cn: "720p", hint: "标清 · 生成快 · 更省积分（默认）" },
   { id: "1080p", cn: "1080p", hint: "高清 · 更耗时 · 更贵" },
   { id: "4k",    cn: "4K",   hint: "超清 · 最耗时 · 最贵" },

@@ -1,4 +1,6 @@
 import { CopyIcon, EditIcon, TrashIcon } from "@/components/icons";
+import { ZoomableImage } from "@/components/primitives/ZoomableImage";
+import { characterImage } from "@/lib/characterImage";
 import { Portrait } from "./Portrait";
 import type { Character } from "@/types";
 import { useT } from "@/lib/i18n";
@@ -21,11 +23,21 @@ export function CharacterList({ characters, onEdit, onDelete }: Props) {
         <span className="char-list-cell ref">{t("参考图")}</span>
         <span className="char-list-cell actions" />
       </div>
-      {characters.map((c) => (
+      {characters.map((c) => {
+        const img = characterImage(c);
+        return (
         <div key={c.id} className="char-list-row" onClick={() => onEdit(c)}>
           <div className="char-list-cell name">
             <div className="char-list-portrait">
-              <Portrait char={c} />
+              {img ? (
+                <ZoomableImage
+                  src={img}
+                  alt={c.name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              ) : (
+                <Portrait char={c} />
+              )}
             </div>
             <span style={{ fontWeight: 600 }}>{c.name}</span>
           </div>
@@ -75,7 +87,8 @@ export function CharacterList({ characters, onEdit, onDelete }: Props) {
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

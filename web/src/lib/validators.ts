@@ -3,8 +3,9 @@ import type { GlobalLayer, OutputLayer, Project, Shot } from "@/types";
 export function isFilled(g: GlobalLayer, fieldId: string): boolean {
   switch (fieldId) {
     case "duration":   return g.total_duration_seconds != null && g.total_duration_seconds > 0;
-    case "scene":      return !!g.scene_image;
+    case "scene":      return (g.scenes ?? []).length > 0;
     case "position":   return !!g.position_image_url;
+    case "prop":       return (g.props ?? []).length > 0;
     case "style":      return (g.style ?? []).length > 0;
     case "characters": return (g.characters ?? []).length > 0;
     case "story":      return (g.story ?? "").length > 0;

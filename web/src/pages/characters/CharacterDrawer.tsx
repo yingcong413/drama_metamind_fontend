@@ -4,6 +4,7 @@ import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/primitives/Avatar";
 import { ChipSelect } from "@/components/primitives/ChipSelect";
 import { Field } from "@/components/primitives/Field";
+import { Toggle } from "@/components/primitives/Toggle";
 import { createCharacter, updateCharacter, type CharacterUpsert } from "@/api/characters";
 import { listCharacterAssets } from "@/api/assets";
 import { avatarHue } from "@/lib/avatarHue";
@@ -11,8 +12,9 @@ import {
   resolveCharacterAudioRef,
   resolveCharacterImageRef,
 } from "@/lib/naturalLanguage";
-import type { Asset, Character } from "@/types";
+import type { Asset, Character, CharacterVariant } from "@/types";
 import { SingleAssetSlot, MultiAssetGrid } from "./AssetSection";
+import { CharacterVariants } from "./CharacterVariants";
 import { useT, useTf } from "@/lib/i18n";
 
 const TAG_OPTIONS = ["女主", "男主", "配角", "路人", "都市", "校园", "成熟", "少年", "古风"];
@@ -31,12 +33,16 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
   const [role, setRole] = useState(character?.role ?? "");
   const [desc, setDesc] = useState(character?.desc ?? "");
   const [tags, setTags] = useState<string[]>(character?.tags ?? []);
+  const [hasVariants, setHasVariants] = useState(character?.has_variants ?? false);
+  const [variants, setVariants] = useState<CharacterVariant[]>(character?.variants ?? []);
 
   useEffect(() => {
     setName(character?.name ?? "");
     setRole(character?.role ?? "");
     setDesc(character?.desc ?? "");
     setTags(character?.tags ?? []);
+    setHasVariants(character?.has_variants ?? false);
+    setVariants(character?.variants ?? []);
   }, [character]);
 
   // —— 素材列表（仅在编辑已有角色时拉，新建角色没有 character_id 不能传） ——
@@ -121,6 +127,8 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
       ref_images: character?.ref_images ?? [],
       voice_sample_url: character?.voice_sample_url ?? null,
       hue: character?.hue ?? avatarHue(name || "?"),
+      has_variants: hasVariants,
+      variants: hasVariants ? variants : [],
     };
     if (isNew) create.mutate(payload);
     else update.mutate(payload);
@@ -183,6 +191,30 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
               <ChipSelect multi options={TAG_OPTIONS} value={tags} onChange={setTags} />
             </Field>
 
+            {/* —— 角色变体开关 —— */}
+            <Field
+              title={t("角色变体")}
+              tags={["opt"]}
+              help={t("开启后，可为同一角色管理多套造型（变体），每套各自配名字 / 描述 / 主图 / 多角度图 / 声音参考。")}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Toggle on={hasVariants} onChange={setHasVariants} />
+                <span className="dim" style={{ fontSize: 13 }}>
+                  {hasVariants ? t("有变体 · 用下方列表管理多套造型") : t("无变体 · 使用单套素材")}
+                </span>
+              </div>
+            </Field>
+
+            {hasVariants ? (
+              <Field
+                title={t("变体列表")}
+                tags={["opt"]}
+                help={t("每个变体单独设置：变体名、变体描述、主图、多角度图、声音参考。")}
+              >
+                <CharacterVariants variants={variants} onChange={setVariants} />
+              </Field>
+            ) : (
+            <>
             {/* —— v0.7：素材区。仅在编辑已有角色时显示（新建时还没有 character_id / ark_group_id） —— */}
             {!isNew && character ? (
               <>
@@ -273,6 +305,8 @@ export function CharacterDrawer({ character, isNew, onClose }: Props) {
                   </div>
                 </div>
               </Field>
+            )}
+            </>
             )}
           </div>
         </div>

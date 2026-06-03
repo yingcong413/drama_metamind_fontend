@@ -2,6 +2,8 @@ export * from "./api";
 export * from "./asset";
 export * from "./auth";
 export * from "./character";
+export * from "./scene";
+export * from "./prop";
 export * from "./project";
 export * from "./meta";
 export * from "./task";

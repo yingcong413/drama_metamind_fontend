@@ -213,6 +213,8 @@ export const qingyuProject: Project = {
     total_duration_seconds: 6,
     ratio: "16:9",
     resolution: "720p",
+    scenes: [],
+    props: [],
     scene_image: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/scene_palace_night.jpg",
     position_image_url: "https://face-bucket-metamind-gz.tos-s3-cn-guangzhou.volces.com/seedance_avatars/20260518/position_qy_lyx.png",
     prop_image_url: null,

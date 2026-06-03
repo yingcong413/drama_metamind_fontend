@@ -6,6 +6,9 @@ import { characters } from "./i18nFrags/characters";
 import { result } from "./i18nFrags/result";
 import { account } from "./i18nFrags/account";
 import { common } from "./i18nFrags/common";
+import { workbenchV2 } from "./i18nFrags/workbenchV2";
+import { mediaLibrary } from "./i18nFrags/mediaLibrary";
+import { strayI18n } from "./i18nFrags/strayI18n";
 
 type Table = Record<string, string>;
 
@@ -541,7 +544,7 @@ const ar: Table = {
 };
 
 const base: Partial<Record<Lang, Table>> = { en, fr, es, ar, "zh-TW": zhTW };
-const FRAGMENTS = [base, editor, aiPanel, entry, characters, result, account, common];
+const FRAGMENTS = [base, editor, aiPanel, entry, characters, result, account, common, workbenchV2, mediaLibrary, strayI18n];
 const LANGS: Lang[] = ["en", "fr", "es", "zh-TW", "ar"];
 
 export const DICT: Partial<Record<Lang, Table>> = Object.fromEntries(

@@ -17,17 +17,23 @@ export interface Crumb {
 interface AppTopBarProps {
   crumbs?: Crumb[];
   actions?: ReactNode;
+  /** 固定渲染在顶栏左侧(面包屑之后)的额外内容,如工作台的模式切换条 */
+  leftExtra?: ReactNode;
+  /** 隐藏中间的全站导航(项目/工作台/…),用于首尾帧 / 智能多帧独立画面 */
+  hideNav?: boolean;
 }
 
 const NAV: Array<{ to: string; label: string; match: (p: string) => boolean }> = [
   { to: "/dashboard",  label: "项目",     match: (p) => p === "/" || p.startsWith("/dashboard") },
   { to: "/editor",     label: "工作台",   match: (p) => p.startsWith("/editor") || /\/projects\/[^/]+\/edit/.test(p) },
   { to: "/characters", label: "角色库",   match: (p) => p.startsWith("/characters") },
+  { to: "/scenes",     label: "场景库",   match: (p) => p.startsWith("/scenes") },
+  { to: "/props",      label: "道具库",   match: (p) => p.startsWith("/props") },
   { to: "/result",     label: "生成结果", match: (p) => p.startsWith("/result") || /\/projects\/[^/]+\/result/.test(p) },
   { to: "/account",    label: "使用记录", match: (p) => p.startsWith("/account") },
 ];
 
-export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
+export function AppTopBar({ crumbs = [], actions, leftExtra, hideNav = false }: AppTopBarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT();
@@ -97,19 +103,22 @@ export function AppTopBar({ crumbs = [], actions }: AppTopBarProps) {
             ))}
           </div>
         )}
+        {leftExtra}
       </div>
 
-      <div className="topnav">
-        {NAV.map((n) => (
-          <NavLink
-            key={n.to}
-            to={n.to}
-            className={() => cn(n.match(location.pathname) && "active")}
-          >
-            {t(n.label)}
-          </NavLink>
-        ))}
-      </div>
+      {!hideNav && (
+        <div className="topnav">
+          {NAV.map((n) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              className={() => cn(n.match(location.pathname) && "active")}
+            >
+              {t(n.label)}
+            </NavLink>
+          ))}
+        </div>
+      )}
 
       <div className="topbar-right">
         <button className="btn-ghost btn-icon" title={t("主题")} onClick={toggle}>

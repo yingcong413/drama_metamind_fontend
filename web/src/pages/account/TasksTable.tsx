@@ -25,7 +25,6 @@ export function TasksTable({ rows, onPreview }: Props) {
           <div className="th user">{t("用户")}</div>
           <div className="th id">{t("任务 ID")}</div>
           <div className="th status">{t("状态")}</div>
-          <div className="th progress">{t("进度")}</div>
           <div className="th cost">{t("花费")}</div>
           <div className="th action">{t("详情")}</div>
         </div>
@@ -36,7 +35,13 @@ export function TasksTable({ rows, onPreview }: Props) {
           </div>
         ) : (
           rows.map((task) => (
-            <div key={task.id} className={cn("tasks-row", `status-${task.status}`)}>
+            <div
+              key={task.id}
+              className={cn("tasks-row", `status-${task.status}`)}
+              style={{ cursor: "pointer" }}
+              onClick={() => onPreview(task)}
+              title={t("点击查看详情")}
+            >
               <div className="td time mono">{formatDateTime(task.submit_time)}</div>
               <div className="td time mono">{task.end_time ? formatDateTime(task.end_time) : "—"}</div>
               <div className="td dur">
@@ -62,15 +67,6 @@ export function TasksTable({ rows, onPreview }: Props) {
               <div className="td id mono" title={task.id}>{task.id}</div>
               <div className="td status">
                 <StatusBadge status={task.status} />
-              </div>
-              <div className="td progress">
-                <div className="prog-bar">
-                  <div
-                    className={cn("prog-fill", `prog-${task.status}`)}
-                    style={{ width: task.progress + "%" }}
-                  />
-                </div>
-                <span className="prog-pct mono">{task.progress}%</span>
               </div>
               <div className="td cost">
                 {task.cost_cents > 0 ? (

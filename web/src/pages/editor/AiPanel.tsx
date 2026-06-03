@@ -1,10 +1,86 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { ZoomableImage } from "@/components/primitives/ZoomableImage";
 import { useT, useTf } from "@/lib/i18n";
+import type { Character, Prop, Scene } from "@/types";
 
 type FlowKind = "image" | "text";
 type ModelKind = FlowKind;
 type FlowId = "character" | "scene" | "prop" | "story";
 type Ans = Record<string, string | null>;
+
+interface AiPanelProps {
+  characters: Character[];
+  scenes: Scene[];
+  props: Prop[];
+  onImportStoryboard: (script: string) => void;
+}
+
+// 宫格数量 → 分镜格数
+const GRID_OPTIONS: { label: string; count: number }[] = [
+  { label: "六宫格", count: 6 },
+  { label: "九宫格", count: 9 },
+  { label: "十二宫格", count: 12 },
+  { label: "十五宫格", count: 15 },
+];
+
+interface StoryboardInputs {
+  charNames: string[];
+  sceneNames: string[];
+  propNames: string[];
+  grid: number;
+  story: string;
+}
+
+const SB_SHOTS = ["大远景", "中景", "近景", "特写", "过肩", "全景", "中近景", "特写", "远景"];
+const SB_CAMS = ["缓慢推镜", "固定机位", "轻微跟摇", "对拉", "右摇", "环绕", "手持", "拉镜", "升镜"];
+const xmlEsc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// 生成一张分镜头脚本(宫格图)的本地 mock 图片(SVG data URL)。
+// 不发请求、不参与最终 prompt;真实后端会返回真实图片 URL。
+function buildStoryboardImage(inp: StoryboardInputs): { url: string; meta: string } {
+  const cols = 3;
+  const rows = Math.max(1, Math.ceil(inp.grid / cols));
+  const cw = 300, ch = 196, pad = 18, headH = 70;
+  const W = cols * cw + pad * 2;
+  const H = headH + rows * ch + pad * 2;
+
+  const cells: string[] = [];
+  for (let i = 0; i < inp.grid; i++) {
+    const r = Math.floor(i / cols), c = i % cols;
+    const x = pad + c * cw, y = headH + pad + r * ch;
+    const who = inp.charNames[i % Math.max(1, inp.charNames.length)] || "主角";
+    const where = inp.sceneNames[i % Math.max(1, inp.sceneNames.length)] || "主场景";
+    const n = String(i + 1).padStart(2, "0");
+    cells.push(
+      `<g>
+        <rect x="${x + 6}" y="${y + 6}" width="${cw - 12}" height="${ch - 12}" rx="8" fill="#1f2430" stroke="#3a4252" stroke-width="1.5"/>
+        <text x="${x + 20}" y="${y + 34}" fill="#7dd3fc" font-size="15" font-family="monospace" font-weight="700">镜 ${n}</text>
+        <text x="${x + 20}" y="${y + 60}" fill="#e5e7eb" font-size="14">${xmlEsc(SB_SHOTS[i % SB_SHOTS.length])} · ${xmlEsc(SB_CAMS[i % SB_CAMS.length])}</text>
+        <text x="${x + 20}" y="${y + ch - 44}" fill="#9ca3af" font-size="13">场景：${xmlEsc(where)}</text>
+        <text x="${x + 20}" y="${y + ch - 24}" fill="#9ca3af" font-size="13">出场：${xmlEsc(who)}</text>
+      </g>`,
+    );
+  }
+
+  const title = `分镜头脚本 · ${inp.grid} 宫格`;
+  const sub = [
+    inp.sceneNames[0] ? `场景：${inp.sceneNames[0]}` : "",
+    inp.story.trim() ? `梗概：${inp.story.trim().slice(0, 26)}` : "",
+  ].filter(Boolean).join("　");
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+    `<rect width="${W}" height="${H}" fill="#11151c"/>` +
+    `<text x="${pad + 6}" y="34" fill="#ffffff" font-size="21" font-weight="700">${xmlEsc(title)}</text>` +
+    `<text x="${pad + 6}" y="57" fill="#9ca3af" font-size="13">${xmlEsc(sub)}</text>` +
+    cells.join("") +
+    `</svg>`;
+
+  const url = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  const meta = `${inp.grid} 宫格 · ${inp.charNames.length} 角色 · ${inp.sceneNames.length} 场景`;
+  return { url, meta };
+}
 
 interface Step {
   key: string;
@@ -180,12 +256,13 @@ const I = {
 };
 
 function Beats({ beats }: { beats: Beat[] }) {
+  const t = useT();
   return (
     <>
       {beats.map((b, i) => (
         <div className="beat" key={i}>
           <span className="bn">{b.n}</span>
-          {b.text}
+          {typeof b.text === "string" ? t(b.text) : b.text}
         </div>
       ))}
     </>
@@ -293,7 +370,8 @@ type Msg =
   | { id: string; role: "bot"; kind: "genproc"; flowKind: FlowKind; pct: number; status: string; summary: string }
   | { id: string; role: "bot"; kind: "result"; flowId: FlowId; ans: Ans; summary: string }
   | { id: string; role: "bot"; kind: "free"; freeKind: "image"; text: string }
-  | { id: string; role: "bot"; kind: "stream"; full: string; shown: number; done: boolean; idea: string | null };
+  | { id: string; role: "bot"; kind: "stream"; full: string; shown: number; done: boolean; idea: string | null }
+  | { id: string; role: "bot"; kind: "storyboard"; url: string; meta: string };
 
 let seq = 0;
 const uid = () => "m" + ++seq;
@@ -321,7 +399,7 @@ function Intro({ model }: { model: ModelKind }): ReactNode {
 
 type TextMode = "choose" | "hasScript" | "noScript";
 
-export function AiPanel() {
+export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPanelProps) {
   const t = useT();
   const tf = useTf();
   const [model, setModel] = useState<ModelKind>("image");
@@ -333,7 +411,11 @@ export function AiPanel() {
   const [flowId, setFlowId] = useState<FlowId | null>(null);
   const [flowStep, setFlowStep] = useState(0);
   const [flowAns, setFlowAns] = useState<Ans>({});
+  const [storyboardOpen, setStoryboardOpen] = useState(false);
   const lastResult = useRef<{ flowId: FlowId; ans: Ans } | null>(null);
+  const lastStoryboard = useRef<StoryboardInputs | null>(null);
+  // 最近一次「生成」是普通流程还是分镜头脚本,决定「重新生成」走哪条
+  const lastGenKind = useRef<"flow" | "storyboard">("flow");
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
@@ -364,6 +446,7 @@ export function AiPanel() {
     setFlowId(null);
     setFlowStep(0);
     setFlowAns({});
+    setStoryboardOpen(false);
     setTextMode("choose");
     const startMsgs: Msg[] = [{ id: uid(), role: "bot", kind: "text", node: <Intro model={next} /> }];
     setMessages(startMsgs);
@@ -397,6 +480,7 @@ export function AiPanel() {
   }
 
   function startGeneration(id: FlowId, ans: Ans) {
+    lastGenKind.current = "flow";
     const def = FLOWS[id];
     const summary = summaryOf(def, ans);
     const mid = uid();
@@ -423,7 +507,52 @@ export function AiPanel() {
     timers.current.push(timer);
   }
 
+  // 分镜头脚本:跑一段「生成中」动画,完成后落一条 storyboard 结果消息
+  function startStoryboardGen(inp: StoryboardInputs) {
+    lastGenKind.current = "storyboard";
+    lastStoryboard.current = inp;
+    const { url, meta } = buildStoryboardImage(inp);
+    const mid = uid();
+    setMessages((m) => [
+      ...m,
+      { id: mid, role: "bot", kind: "genproc", flowKind: "image", pct: 0, status: GEN_STATUS.image[0], summary: meta },
+    ]);
+    let p = 0;
+    const steps = GEN_STATUS.image;
+    const timer = window.setInterval(() => {
+      p = Math.min(100, p + 7 + Math.random() * 9);
+      const status = steps[Math.min(steps.length - 1, Math.floor(p / 34))];
+      const pct = p;
+      setMessages((m) => m.map((x) => (x.id === mid && x.kind === "genproc" ? { ...x, pct, status } : x)));
+      if (p >= 100) {
+        window.clearInterval(timer);
+        timers.current = timers.current.filter((tt) => tt !== timer);
+        const done = window.setTimeout(() => {
+          setMessages((m) => m.map((x) => (x.id === mid ? { id: mid, role: "bot", kind: "storyboard", url, meta } : x)));
+        }, 340);
+        timers.current.push(done);
+      }
+    }, 240);
+    timers.current.push(timer);
+  }
+
+  function handleStoryboardGenerate(inp: StoryboardInputs) {
+    setStoryboardOpen(false);
+    const parts = [
+      tf("{n} 宫格", { n: inp.grid }),
+      inp.charNames.length ? tf("角色：{v}", { v: inp.charNames.join("、") }) : null,
+      inp.sceneNames.length ? tf("场景：{v}", { v: inp.sceneNames.join("、") }) : null,
+      inp.propNames.length ? tf("道具：{v}", { v: inp.propNames.join("、") }) : null,
+    ].filter(Boolean);
+    setMessages((m) => [
+      ...m,
+      { id: uid(), role: "user", kind: "user", text: tf("生成分镜头脚本 · {v}", { v: parts.join(" · ") }) },
+    ]);
+    startStoryboardGen(inp);
+  }
+
   function startFlow(id: FlowId) {
+    setStoryboardOpen(false);
     setFlowId(id);
     setFlowStep(0);
     setFlowAns({});
@@ -448,7 +577,11 @@ export function AiPanel() {
     setFlowStep(Math.max(0, Math.min(i, FLOWS[flowId].steps.length - 1)));
   }
   function regen() {
-    if (lastResult.current) startGeneration(lastResult.current.flowId, lastResult.current.ans);
+    if (lastGenKind.current === "storyboard" && lastStoryboard.current) {
+      startStoryboardGen(lastStoryboard.current);
+    } else if (lastResult.current) {
+      startGeneration(lastResult.current.flowId, lastResult.current.ans);
+    }
   }
   function pushBotText(node: ReactNode) {
     setMessages((m) => [...m, { id: uid(), role: "bot", kind: "text", node }]);
@@ -456,10 +589,10 @@ export function AiPanel() {
 
   function sendPreset(i: number) {
     const p = TEXT_PRESETS[i];
-    setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: p.q }]);
+    setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: t(p.q) }]);
     const lid = uid();
     setMessages((m) => [...m, { id: lid, role: "bot", kind: "loading" }]);
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setMessages((m) =>
         m.map((x) =>
           x.id === lid
@@ -469,9 +602,9 @@ export function AiPanel() {
                 kind: "text",
                 node: (
                   <>
-                    <strong>{p.title}</strong> · {p.meta}
+                    <strong>{t(p.title)}</strong> · {t(p.meta)}
                     <br />
-                    <span className="dim">{p.hook}</span>
+                    <span className="dim">{t(p.hook)}</span>
                     <Beats beats={p.beats} />
                   </>
                 ),
@@ -480,7 +613,7 @@ export function AiPanel() {
         ),
       );
     }, 1000);
-    timers.current.push(t);
+    timers.current.push(timer);
   }
 
   function streamReply(full: string, idea: string | null) {
@@ -579,7 +712,13 @@ export function AiPanel() {
 
       <div className="ai-body" ref={bodyRef}>
         {messages.map((m) => (
-          <MessageRow key={m.id} msg={m} onAdopt={pushBotText} onRegen={regen} />
+          <MessageRow
+            key={m.id}
+            msg={m}
+            onAdopt={pushBotText}
+            onRegen={regen}
+            onImportStoryboard={onImportStoryboard}
+          />
         ))}
       </div>
 
@@ -589,6 +728,16 @@ export function AiPanel() {
         flowId={flowId}
         flowStep={flowStep}
         flowAns={flowAns}
+        characters={characters}
+        scenes={scenes}
+        props={props}
+        storyboardOpen={storyboardOpen}
+        onStartStoryboard={() => {
+          setFlowId(null);
+          setStoryboardOpen(true);
+        }}
+        onStoryboardGenerate={handleStoryboardGenerate}
+        onStoryboardCancel={() => setStoryboardOpen(false)}
         onStart={startFlow}
         onCancel={() => {
           setFlowId(null);
@@ -627,10 +776,12 @@ function MessageRow({
   msg,
   onAdopt,
   onRegen,
+  onImportStoryboard,
 }: {
   msg: Msg;
   onAdopt: (node: ReactNode) => void;
   onRegen: () => void;
+  onImportStoryboard: (script: string) => void;
 }) {
   const t = useT();
   const ava =
@@ -643,7 +794,7 @@ function MessageRow({
     <div className={"ai-msg " + (msg.role === "user" ? "user" : "bot")}>
       {ava}
       <div className="ai-bubble">
-        <MessageBody msg={msg} onAdopt={onAdopt} onRegen={onRegen} />
+        <MessageBody msg={msg} onAdopt={onAdopt} onRegen={onRegen} onImportStoryboard={onImportStoryboard} />
       </div>
     </div>
   );
@@ -653,10 +804,12 @@ function MessageBody({
   msg,
   onAdopt,
   onRegen,
+  onImportStoryboard,
 }: {
   msg: Msg;
   onAdopt: (node: ReactNode) => void;
   onRegen: () => void;
+  onImportStoryboard: (script: string) => void;
 }) {
   const t = useT();
   if (msg.kind === "user") return <>{msg.text}</>;
@@ -711,8 +864,74 @@ function MessageBody({
       </>
     );
   }
+  if (msg.kind === "storyboard") {
+    return (
+      <StoryboardCard
+        url={msg.url}
+        meta={msg.meta}
+        onAdopt={onAdopt}
+        onRegen={onRegen}
+        onImportStoryboard={onImportStoryboard}
+      />
+    );
+  }
   // result
   return <ResultCard flowId={msg.flowId} ans={msg.ans} summary={msg.summary} onAdopt={onAdopt} onRegen={onRegen} />;
+}
+
+function StoryboardCard({
+  url,
+  meta,
+  onAdopt,
+  onRegen,
+  onImportStoryboard,
+}: {
+  url: string;
+  meta: string;
+  onAdopt: (node: ReactNode) => void;
+  onRegen: () => void;
+  onImportStoryboard: (url: string) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      <strong>{t("已生成分镜头脚本图：")}</strong>
+      <span className="dim" style={{ marginLeft: 6, fontSize: 11 }}>
+        {meta}
+      </span>
+      <div
+        style={{
+          marginTop: 8,
+          padding: 6,
+          background: "#0b0d12",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <ZoomableImage
+          src={url}
+          alt={t("分镜头脚本图")}
+          style={{ maxWidth: "100%", maxHeight: 260, objectFit: "contain", display: "block" }}
+        />
+      </div>
+      <div className="ai-gen-actions">
+        <button
+          className="btn btn-sm"
+          onClick={() => {
+            onImportStoryboard(url);
+            onAdopt(<>{t("✓ 已导入到「字段 07 · 分镜头脚本」，左侧可继续编辑或替换。")}</>);
+          }}
+        >
+          {t("导入到分镜头脚本")}
+        </button>
+        <button className="btn btn-sm btn-ghost" onClick={onRegen}>
+          {t("重新生成")}
+        </button>
+      </div>
+    </>
+  );
 }
 
 function ResultCard({
@@ -833,6 +1052,13 @@ function QuickArea({
   flowId,
   flowStep,
   flowAns,
+  characters,
+  scenes,
+  props,
+  storyboardOpen,
+  onStartStoryboard,
+  onStoryboardGenerate,
+  onStoryboardCancel,
   onStart,
   onCancel,
   onSelect,
@@ -850,6 +1076,13 @@ function QuickArea({
   flowId: FlowId | null;
   flowStep: number;
   flowAns: Ans;
+  characters: Character[];
+  scenes: Scene[];
+  props: Prop[];
+  storyboardOpen: boolean;
+  onStartStoryboard: () => void;
+  onStoryboardGenerate: (inp: StoryboardInputs) => void;
+  onStoryboardCancel: () => void;
   onStart: (id: FlowId) => void;
   onCancel: () => void;
   onSelect: (v: string) => void;
@@ -864,6 +1097,17 @@ function QuickArea({
 }) {
   const t = useT();
   const tf = useTf();
+  if (storyboardOpen) {
+    return (
+      <StoryboardForm
+        characters={characters}
+        scenes={scenes}
+        props={props}
+        onGenerate={onStoryboardGenerate}
+        onCancel={onStoryboardCancel}
+      />
+    );
+  }
   if (flowId) {
     const def = FLOWS[flowId];
     const step = def.steps[flowStep];
@@ -921,6 +1165,7 @@ function QuickArea({
           <ActionBtn icon={I.person} bg="var(--layer-shot-soft)" fg="var(--layer-shot)" title={t("生成角色")} sub={t("风格 / 性别 / 身份…")} onClick={() => onStart("character")} />
           <ActionBtn icon={I.scene} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成场景")} sub={t("地点 / 时间 / 氛围")} onClick={() => onStart("scene")} />
           <ActionBtn icon={I.prop} bg="var(--layer-output-soft)" fg="var(--layer-output)" title={t("生成道具")} sub={t("类型 / 材质 / 颜色")} onClick={() => onStart("prop")} />
+          <ActionBtn icon={I.film} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成分镜头脚本")} sub={t("角色 / 场景 / 道具 / 宫格")} onClick={onStartStoryboard} />
         </div>
       </div>
     );
@@ -957,7 +1202,7 @@ function QuickArea({
       {TEXT_PRESETS.map((p, i) => (
         <button className="ai-preset" key={i} onClick={() => onPreset(i)}>
           <span className="pico">{I.film}</span>
-          {p.q}
+          {t(p.q)}
         </button>
       ))}
     </div>
@@ -1024,6 +1269,135 @@ function ScriptUpload({
       <input ref={fileRef} type="file" accept=".txt,.doc,.docx" hidden onChange={onFile} />
       <button className="btn btn-primary ai-gen-btn" disabled={!canImport} onClick={doImport}>
         {t("解析并填入")}
+      </button>
+    </div>
+  );
+}
+
+function PickRow({
+  label,
+  empty,
+  items,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  empty: string;
+  items: { id: string; name: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="ai-q">{label}</div>
+      {items.length === 0 ? (
+        <div className="ai-skiphint">{empty}</div>
+      ) : (
+        <div className="chips ai-flow-chips">
+          {items.map((it) => (
+            <div
+              className={"chip" + (selected.includes(it.id) ? " selected global" : "")}
+              key={it.id}
+              onClick={() => onToggle(it.id)}
+            >
+              {it.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StoryboardForm({
+  characters,
+  scenes,
+  props,
+  onGenerate,
+  onCancel,
+}: {
+  characters: Character[];
+  scenes: Scene[];
+  props: Prop[];
+  onGenerate: (inp: StoryboardInputs) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const [charIds, setCharIds] = useState<string[]>([]);
+  const [sceneIds, setSceneIds] = useState<string[]>([]);
+  const [propIds, setPropIds] = useState<string[]>([]);
+  const [grid, setGrid] = useState(9);
+  const [story, setStory] = useState("");
+
+  const toggle = (ids: string[], set: (v: string[]) => void, id: string) =>
+    set(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  const namesFrom = (list: { id: string; name: string }[], ids: string[]) =>
+    ids.map((id) => list.find((x) => x.id === id)?.name).filter((n): n is string => !!n);
+
+  const generate = () =>
+    onGenerate({
+      charNames: namesFrom(characters, charIds),
+      sceneNames: namesFrom(scenes, sceneIds),
+      propNames: namesFrom(props, propIds),
+      grid,
+      story,
+    });
+
+  return (
+    <div className="ai-quick">
+      <div className="ai-qlabel">
+        {t("生成分镜头脚本 · 选好素材后一键生成")}
+        <button className="back" onClick={onCancel}>
+          {I.arrow} {t("返回入口")}
+        </button>
+      </div>
+
+      <PickRow
+        label={t("角色 · 选角色库中的角色")}
+        empty={t("角色库暂无角色")}
+        items={characters}
+        selected={charIds}
+        onToggle={(id) => toggle(charIds, setCharIds, id)}
+      />
+      <PickRow
+        label={t("场景 · 选场景库中的场景")}
+        empty={t("场景库暂无场景")}
+        items={scenes}
+        selected={sceneIds}
+        onToggle={(id) => toggle(sceneIds, setSceneIds, id)}
+      />
+      <PickRow
+        label={t("道具 · 选道具库中的道具")}
+        empty={t("道具库暂无道具")}
+        items={props}
+        selected={propIds}
+        onToggle={(id) => toggle(propIds, setPropIds, id)}
+      />
+
+      <div className="ai-q" style={{ marginTop: 8 }}>{t("宫格数量")}</div>
+      <div className="chips ai-flow-chips">
+        {GRID_OPTIONS.map((g) => (
+          <div
+            className={"chip" + (grid === g.count ? " selected global" : "")}
+            key={g.count}
+            onClick={() => setGrid(g.count)}
+          >
+            {t(g.label)}
+          </div>
+        ))}
+      </div>
+
+      <div className="ai-q" style={{ marginTop: 8 }}>{t("故事内容")}</div>
+      <textarea
+        className="input"
+        style={{ minHeight: 80, resize: "vertical", width: "100%" }}
+        placeholder={t("简单描述这段短剧的故事内容…")}
+        value={story}
+        onChange={(e) => setStory(e.target.value)}
+      />
+
+      <button className="btn btn-primary ai-gen-btn" style={{ marginTop: 10 }} onClick={generate}>
+        {t("生成分镜头脚本")}
       </button>
     </div>
   );

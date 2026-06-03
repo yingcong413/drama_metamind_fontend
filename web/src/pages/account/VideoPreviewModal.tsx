@@ -1,4 +1,6 @@
-import { CloseIcon, CopyIcon, PlayIcon, UploadIcon } from "@/components/icons";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { CloseIcon, CopyIcon, PlayIcon, SparkleIcon, UploadIcon } from "@/components/icons";
 import { formatDateTime, formatYuan } from "@/lib/format";
 import { useT, useTf } from "@/lib/i18n";
 import type { GenerationTask } from "@/types";
@@ -11,7 +13,50 @@ interface Props {
 export function VideoPreviewModal({ task, onClose }: Props) {
   const t = useT();
   const tf = useTf();
+  const navigate = useNavigate();
   const videoUrl = task.output_video_url;
+
+  // 给模型的所有提示词:优先自然语言文本,退化到结构化 JSON,再退化到占位
+  const promptText =
+    task.prompt?.natural_text?.trim() ||
+    (task.prompt?.structured_json
+      ? JSON.stringify(task.prompt.structured_json, null, 2)
+      : "") ||
+    t("本任务未保存提示词记录");
+
+  const [copied, setCopied] = useState(false);
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(promptText);
+    } catch {
+      const ta = document.getElementById("vm-prompt-textarea") as HTMLTextAreaElement | null;
+      ta?.select();
+      document.execCommand("copy");
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleRegenerate = () => {
+    if (!task.project_id) {
+      alert(t("该任务未关联项目，无法重新生成"));
+      return;
+    }
+    onClose();
+    navigate(`/projects/${task.project_id}/edit`);
+  };
+
+  const handleDownload = () => {
+    if (!videoUrl) return;
+    const a = document.createElement("a");
+    a.href = videoUrl;
+    a.download = "";
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   return (
     <>
@@ -103,20 +148,65 @@ export function VideoPreviewModal({ task, onClose }: Props) {
                   textTransform: "uppercase", marginBottom: 8,
                 }}
               >
-                {t("下载")}
+                {t("操作")}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button className="btn btn-primary" style={{ justifyContent: "flex-start", padding: "10px 14px" }}>
-                  <UploadIcon style={{ transform: "rotate(180deg)" }} /> {t("下载视频 · MP4 · 1080p")}
+                <button
+                  className="btn btn-primary"
+                  style={{ justifyContent: "flex-start", padding: "10px 14px" }}
+                  onClick={handleRegenerate}
+                >
+                  <SparkleIcon /> {t("重新生成视频")}
                 </button>
-                <button className="btn" style={{ justifyContent: "flex-start", padding: "10px 14px" }}>
-                  <UploadIcon style={{ transform: "rotate(180deg)" }} /> {t("下载 ProRes 母版")}
-                  <span className="dim-2 mono" style={{ marginLeft: "auto", fontSize: 10 }}>27 MB</span>
-                </button>
-                <button className="btn" style={{ justifyContent: "flex-start", padding: "10px 14px" }}>
-                  <CopyIcon /> {t("复制分享链接")}
+                <button
+                  className="btn"
+                  style={{ justifyContent: "flex-start", padding: "10px 14px" }}
+                  onClick={handleDownload}
+                  disabled={!videoUrl}
+                >
+                  <UploadIcon style={{ transform: "rotate(180deg)" }} /> {t("下载原视频")}
                 </button>
               </div>
+            </div>
+
+            <div className="vm-section">
+              <div
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <span
+                  className="dim-2 mono"
+                  style={{ fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase" }}
+                >
+                  {t("提示词")}
+                </span>
+                <button className="btn-ghost btn-sm" onClick={copyPrompt} style={{ padding: "2px 8px" }}>
+                  <CopyIcon /> {copied ? t("已复制") : t("复制")}
+                </button>
+              </div>
+              <textarea
+                id="vm-prompt-textarea"
+                readOnly
+                value={promptText}
+                style={{
+                  width: "100%",
+                  minHeight: 220,
+                  resize: "vertical",
+                  padding: 12,
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                  fontFamily: "var(--font-mono), monospace",
+                  background: "var(--surface-2)",
+                  color: "var(--text)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  outline: "none",
+                  whiteSpace: "pre-wrap",
+                  boxSizing: "border-box",
+                }}
+              />
             </div>
 
           </div>

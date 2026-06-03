@@ -5,6 +5,8 @@ import { AppTopBar } from "@/components/layout/AppTopBar";
 import { CheckIcon, CloseIcon, SaveIcon, SparkleIcon } from "@/components/icons";
 import { getProject, listProjects, updateProject } from "@/api/projects";
 import { listCharacters } from "@/api/characters";
+import { listScenes } from "@/api/scenes";
+import { listProps } from "@/api/props";
 import { computeValidation } from "@/lib/validators";
 import { getLastProjectId, setLastProjectId, clearLastProjectId } from "@/lib/lastProject";
 import { useT, useTf } from "@/lib/i18n";
@@ -16,6 +18,14 @@ import { ShotView } from "./ShotView";
 import { PromptPreviewModal } from "./PromptPreviewModal";
 import { GenerateRequestModal } from "./GenerateRequestModal";
 import { AiPanel } from "./AiPanel";
+import { FrameComposer } from "./FrameComposer";
+import { useGenModeStore, type GenMode } from "@/stores/genMode";
+
+const MODE_OPTS: { id: GenMode; label: string }[] = [
+  { id: "regular", label: "常规模式" },
+  { id: "first_last", label: "首尾帧模式" },
+  { id: "smart_multi", label: "智能多帧模式" },
+];
 
 type ActiveKey = "global" | `shot:${string}`;
 
@@ -46,6 +56,9 @@ export function EditorPage() {
   const tf = useTf();
   const params = useParams<{ id: string }>();
   const urlId = params.id; // 路由 /editor 时为 undefined;/projects/:id/edit 时为具体 id
+  const genMode = useGenModeStore((s) => s.mode);
+  const setGenMode = useGenModeStore((s) => s.setMode);
+  const solo = genMode !== "regular";
 
   // 路径无 id(顶栏「工作台」直接进):跳到上次工作的项目;没有就跳回项目列表。
   // 用 useEffect 是因为 useNavigate 不能在渲染期间调,且这一跳只发生一次。
@@ -94,6 +107,18 @@ export function EditorPage() {
     queryFn: listCharacters,
     // 角色库改完(改名/换图/desc 等)再回来时,务必拿到最新数据,
     // 否则 buildPromptText / buildSeedancePayload 算出的 JSON 跟用户期望对不上
+    refetchOnMount: "always",
+    staleTime: 0,
+  });
+  const scenesQuery = useQuery({
+    queryKey: ["scenes"],
+    queryFn: listScenes,
+    refetchOnMount: "always",
+    staleTime: 0,
+  });
+  const propsQuery = useQuery({
+    queryKey: ["props"],
+    queryFn: listProps,
     refetchOnMount: "always",
     staleTime: 0,
   });
@@ -316,6 +341,43 @@ export function EditorPage() {
     setProject({ ...project, shots: [...project.shots, next] });
     selectShot(next.id);
   };
+
+  // 根据「故事内容」自动拆解出多个分镜(本地拆句,不发请求)。
+  // 真实后端接入后可替换为调用大模型返回的分镜结构。
+  const autoGenerateShots = () => {
+    if (!project) return;
+    const story = (project.global.story || "").trim();
+    if (!story) {
+      alert(t("请先填写「故事内容」，再自动生成分镜头。"));
+      return;
+    }
+    const segments = story
+      .split(/[。.!！?？;；\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (segments.length === 0) return;
+    // 至少 3 段、最多 8 段:段落不足时按句拆;过多时只取前 8 段
+    const picked = segments.slice(0, 8);
+    if (
+      project.shots.length > 0 &&
+      !confirm(
+        tf("已有 {n} 个分镜，自动生成会替换现有分镜，是否继续？", { n: project.shots.length }),
+      )
+    ) {
+      return;
+    }
+    const base = Date.now().toString(36);
+    const shots: Shot[] = picked.map((seg, i) => ({
+      ...newShot(),
+      id: `s_${base}_${i}`,
+      name: tf("分镜 {n}", { n: i + 1 }),
+      order: i,
+      description: seg,
+      action: { start: seg, mid: "", end: "" },
+    }));
+    setProject({ ...project, shots });
+    selectShot(shots[0].id);
+  };
   const duplicateShot = (sid: string) => {
     if (!project) return;
     const src = project.shots.find((s) => s.id === sid);
@@ -362,11 +424,28 @@ export function EditorPage() {
   const prevShot = shotIndex > 0 ? project.shots[shotIndex - 1] : null;
   const showShotView = activeKey !== "global" && currentShot !== null;
 
+  const modeTabs = (
+    <div className="segmented mode-seg">
+      {MODE_OPTS.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          className={genMode === m.id ? "active" : undefined}
+          onClick={() => setGenMode(m.id)}
+        >
+          {t(m.label)}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <>
       <AppTopBar
         crumbs={[{ label: t("项目"), to: "/dashboard" }, { label: project.name }]}
-        actions={
+        leftExtra={modeTabs}
+        hideNav={solo}
+        actions={solo ? undefined : (
           <>
             {/* 必填项缺失常驻提示:点击展开具体列表 */}
             {!validation.canGenerate && (
@@ -405,31 +484,42 @@ export function EditorPage() {
               <SparkleIcon /> {openingModal === "generate" ? t("准备中…") : t("生成视频")}
             </button>
           </>
-        }
+        )}
       />
 
       <div
-        className="editor has-ai"
+        className={solo ? "editor solo" : "editor has-ai"}
         ref={editorRef}
-        style={aiWidth ? ({ ["--ai-w"]: aiWidth + "px" } as CSSProperties) : undefined}
+        style={!solo && aiWidth ? ({ ["--ai-w"]: aiWidth + "px" } as CSSProperties) : undefined}
       >
-        <EditorNav
-          project={project}
-          activeKey={activeKey}
-          activeShot={activeShot}
-          scrollAnchor={scrollAnchor}
-          globalCollapsed={globalCollapsed}
-          shotsCollapsed={shotsCollapsed}
-          toggleGlobal={() => setGlobalCollapsed((c) => !c)}
-          toggleShots={() => setShotsCollapsed((c) => !c)}
-          selectGlobal={selectGlobal}
-          selectShot={selectShot}
-          duplicateShot={duplicateShot}
-          deleteShot={deleteShot}
-          addShot={addShot}
-        />
+        {!solo && (
+          <EditorNav
+            project={project}
+            activeKey={activeKey}
+            activeShot={activeShot}
+            scrollAnchor={scrollAnchor}
+            globalCollapsed={globalCollapsed}
+            shotsCollapsed={shotsCollapsed}
+            toggleGlobal={() => setGlobalCollapsed((c) => !c)}
+            toggleShots={() => setShotsCollapsed((c) => !c)}
+            selectGlobal={selectGlobal}
+            selectShot={selectShot}
+            duplicateShot={duplicateShot}
+            deleteShot={deleteShot}
+            addShot={addShot}
+          />
+        )}
 
         <main className="main" ref={mainRef}>
+          {solo ? (
+            <FrameComposer
+              mode={genMode === "first_last" ? "first_last" : "smart_multi"}
+              value={project.global}
+              set={updateGlobal}
+              onGenerate={() => navigate(`/projects/${project.id}/result`)}
+            />
+          ) : (
+          <>
           {!showShotView || !currentShot ? (
             <GlobalLayerView
               global={project.global}
@@ -437,6 +527,9 @@ export function EditorPage() {
               output={project.output}
               setOutput={updateOutput}
               characters={charsQuery.data}
+              scenes={scenesQuery.data ?? []}
+              props={propsQuery.data ?? []}
+              onAutoGenShots={autoGenerateShots}
             />
           ) : (
             <ShotView
@@ -460,20 +553,34 @@ export function EditorPage() {
             onSelect={(sid) => selectShot(sid)}
             onAdd={addShot}
           />
+          </>
+          )}
         </main>
 
-        <div
-          className="ai-resizer"
-          ref={resizerRef}
-          title={t("拖动调整 AI 面板宽度，双击恢复默认")}
-          onMouseDown={startResize}
-          onTouchStart={startResize}
-          onDoubleClick={() => setAiWidth(null)}
-        >
-          <span className="grip" />
-        </div>
+        {!solo && (
+          <>
+            <div
+              className="ai-resizer"
+              ref={resizerRef}
+              title={t("拖动调整 AI 面板宽度，双击恢复默认")}
+              onMouseDown={startResize}
+              onTouchStart={startResize}
+              onDoubleClick={() => setAiWidth(null)}
+            >
+              <span className="grip" />
+            </div>
 
-        <AiPanel />
+            <AiPanel
+              characters={charsQuery.data}
+              scenes={scenesQuery.data ?? []}
+              props={propsQuery.data ?? []}
+              onImportStoryboard={(imageUrl) => {
+                updateGlobal({ ...project.global, storyboard_image_url: imageUrl });
+                selectGlobal("g-storyboard");
+              }}
+            />
+          </>
+        )}
       </div>
 
       {showPrompt && (

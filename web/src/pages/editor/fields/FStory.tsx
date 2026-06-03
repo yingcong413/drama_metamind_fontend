@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { BookIcon } from "@/components/icons";
+import { BookIcon, SparkleIcon } from "@/components/icons";
 import { useT, useTf } from "@/lib/i18n";
 import type { GlobalLayer } from "@/types";
 
 interface Props {
   value: GlobalLayer;
   set: (g: GlobalLayer) => void;
+  onAutoGenShots?: () => void;
 }
 
-export function FStory({ value, set }: Props) {
+export function FStory({ value, set, onAutoGenShots }: Props) {
   const t = useT();
   const tf = useTf();
   const len = (value.story || "").length;
   const [showEx, setShowEx] = useState(false);
+  const hasStory = !!value.story?.trim();
   return (
     <div>
       <textarea
@@ -21,6 +23,18 @@ export function FStory({ value, set }: Props) {
         value={value.story}
         onChange={(e) => set({ ...value, story: e.target.value })}
       />
+      {onAutoGenShots && (
+        <div style={{ marginTop: 10 }}>
+          <button
+            className="btn btn-sm"
+            disabled={!hasStory}
+            title={hasStory ? t("根据故事内容自动拆解出多个分镜") : t("请先填写故事内容")}
+            onClick={onAutoGenShots}
+          >
+            <SparkleIcon /> {t("自动生成分镜头")}
+          </button>
+        </div>
+      )}
       <div
         style={{
           display: "flex", justifyContent: "space-between",

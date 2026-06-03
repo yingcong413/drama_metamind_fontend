@@ -1,4 +1,6 @@
 import { CopyIcon, EditIcon, TrashIcon } from "@/components/icons";
+import { ZoomButton } from "@/components/primitives/ZoomableImage";
+import { characterImage } from "@/lib/characterImage";
 import { Portrait } from "./Portrait";
 import type { Character } from "@/types";
 import { useT, useTf } from "@/lib/i18n";
@@ -16,11 +18,21 @@ export function CharacterTile({ character: c, onEdit, onDelete }: Props) {
   const processing = c.asset_bundle?.processing_count ?? 0;
   const failed = c.asset_bundle?.failed_count ?? 0;
   const hasAnyAsset = counts.image + counts.video + counts.audio > 0;
+  const img = characterImage(c);
 
   return (
     <article className="char-tile" onClick={onEdit}>
       <div className="char-tile-portrait">
-        <Portrait char={c} />
+        {img ? (
+          <img
+            src={img}
+            alt={c.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        ) : (
+          <Portrait char={c} />
+        )}
+        {img && <ZoomButton src={img} alt={c.name} />}
         <div className="char-tile-id mono">{c.id.toUpperCase()}</div>
         {hasAnyAsset ? (
           <span className="char-tile-flag flag-ref">

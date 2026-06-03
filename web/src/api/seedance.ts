@@ -32,7 +32,7 @@ const MODEL =
 
 export type SeedanceRatio = "16:9" | "9:16" | "1:1" | "adaptive";
 // 视频分辨率,对应接口 resolution 字段(文档枚举 480p/720p,默认 720p;1080p 视上游模型而定)
-export type SeedanceResolution = "720p" | "1080p" | "4k";
+export type SeedanceResolution = "480p" | "720p" | "1080p" | "4k";
 // v0.9.5: 不再固定到 5/8/11 三档,用户拖的值直接透传给 new-api。
 // 若上游模型版本仍要求 5/8/11,会在 submit 阶段以 4xx 报错由前端 toast 展示。
 export type SeedanceDuration = number;

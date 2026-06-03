@@ -1,6 +1,8 @@
 import { useState, type CSSProperties } from "react";
 import { CheckIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { ZoomButton } from "@/components/primitives/ZoomableImage";
 import { avatarHue } from "@/lib/avatarHue";
+import { characterImage } from "@/lib/characterImage";
 import { useT, useTf } from "@/lib/i18n";
 import type { Character, GlobalLayer } from "@/types";
 
@@ -17,9 +19,22 @@ export function FCharacters({ value, set, characters }: Props) {
   const selectedIds = value.characters ?? [];
   const toggle = (id: string) => {
     const s = new Set(selectedIds);
-    if (s.has(id)) s.delete(id);
+    const removing = s.has(id);
+    if (removing) s.delete(id);
     else s.add(id);
-    set({ ...value, characters: [...s] });
+    // 取消选择时,顺手清掉该角色的变体选择
+    let cv = value.character_variants;
+    if (removing && cv && id in cv) {
+      cv = { ...cv };
+      delete cv[id];
+    }
+    set({ ...value, characters: [...s], character_variants: cv });
+  };
+  const setVariant = (id: string, vid: string) => {
+    const next = { ...(value.character_variants ?? {}) };
+    if (vid) next[id] = vid;
+    else delete next[id];
+    set({ ...value, character_variants: next });
   };
   const filtered = characters.filter(
     (c) => !q || c.name.includes(q) || c.role?.includes(q) || c.desc?.includes(q),
@@ -47,6 +62,7 @@ export function FCharacters({ value, set, characters }: Props) {
       <div className="cast-grid">
         {filtered.map((c) => {
           const sel = selectedIds.includes(c.id);
+          const img = characterImage(c);
           return (
             <div
               key={c.id}
@@ -54,12 +70,21 @@ export function FCharacters({ value, set, characters }: Props) {
               onClick={() => toggle(c.id)}
             >
               <div className="cast-card-portrait">
-                <div
-                  className="cast-bar-portrait"
-                  style={{ width: "100%", height: "100%", borderRadius: 0, fontSize: 32, "--ph": c.hue || avatarHue(c.name) } as CSSProperties}
-                >
-                  {c.name.slice(0, 1)}
-                </div>
+                {img ? (
+                  <img
+                    src={img}
+                    alt={c.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                ) : (
+                  <div
+                    className="cast-bar-portrait"
+                    style={{ width: "100%", height: "100%", borderRadius: 0, fontSize: 32, "--ph": c.hue || avatarHue(c.name) } as CSSProperties}
+                  >
+                    {c.name.slice(0, 1)}
+                  </div>
+                )}
+                {img && <ZoomButton src={img} alt={c.name} />}
                 {sel && <div className="cast-card-check"><CheckIcon /></div>}
                 {c.has_ref ? (
                   <span className="cast-card-ref-flag">{t("参考图")}</span>
@@ -75,7 +100,13 @@ export function FCharacters({ value, set, characters }: Props) {
               <div className="cast-card-body">
                 <div className="cast-card-name-row">
                   <span className="cast-card-name">{c.name}</span>
-                  <span className="cast-card-role">{c.role}</span>
+                  {c.has_variants && (c.variants?.length ?? 0) > 0 ? (
+                    <span className="cast-card-role" style={{ color: "var(--accent)" }}>
+                      {tf("{n} 变体", { n: c.variants!.length })}
+                    </span>
+                  ) : (
+                    <span className="cast-card-role">{c.role}</span>
+                  )}
                 </div>
                 <div className="cast-card-desc">{c.desc}</div>
               </div>
@@ -94,6 +125,8 @@ export function FCharacters({ value, set, characters }: Props) {
             {selectedIds.map((id) => {
               const c = characters.find((ch) => ch.id === id);
               if (!c) return null;
+              const variants = c.has_variants ? c.variants ?? [] : [];
+              const curVid = value.character_variants?.[id] ?? "";
               return (
                 <div key={id} className="cast-bar-chip">
                   <div
@@ -102,9 +135,27 @@ export function FCharacters({ value, set, characters }: Props) {
                   >
                     {c.name.slice(0, 1)}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{c.name}</span>
-                    <span className="dim-2" style={{ fontSize: 10 }}>{c.role}</span>
+                    {variants.length > 0 ? (
+                      <select
+                        className="select"
+                        value={curVid}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setVariant(id, e.target.value)}
+                        title={t("选择调用该角色的哪个变体")}
+                        style={{ fontSize: 11, padding: "1px 4px", height: 22, maxWidth: 140 }}
+                      >
+                        <option value="">{t("默认（基础形象）")}</option>
+                        {variants.map((v, i) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name || tf("变体 {n}", { n: i + 1 })}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="dim-2" style={{ fontSize: 10 }}>{c.role}</span>
+                    )}
                   </div>
                   <button
                     className="btn-ghost btn-icon"
@@ -112,7 +163,7 @@ export function FCharacters({ value, set, characters }: Props) {
                       e.stopPropagation();
                       toggle(id);
                     }}
-                    style={{ padding: 2, minWidth: 18 }}
+                    style={{ padding: 2, minWidth: 18, alignSelf: "flex-start" }}
                   >
                     <CloseIcon />
                   </button>

@@ -2,10 +2,11 @@ import { Tag } from "@/components/primitives/Tag";
 import { LayerChip } from "@/components/primitives/LayerChip";
 import { FIELD_DEFS, MODULE_HELPS } from "@/lib/fieldDefs";
 import { useT } from "@/lib/i18n";
-import type { Character, GlobalLayer, OutputLayer } from "@/types";
+import type { Character, GlobalLayer, OutputLayer, Prop, Scene } from "@/types";
 import { FScene } from "./fields/FScene";
 import { FPosition } from "./fields/FPosition";
 import { FProp } from "./fields/FProp";
+import { FStoryboard } from "./fields/FStoryboard";
 import { FStyle } from "./fields/FStyle";
 import { FCharacters } from "./fields/FCharacters";
 import { FStory } from "./fields/FStory";
@@ -24,9 +25,12 @@ interface Props {
   output: OutputLayer;
   setOutput: (o: OutputLayer) => void;
   characters: Character[];
+  scenes: Scene[];
+  props: Prop[];
+  onAutoGenShots: () => void;
 }
 
-export function GlobalLayerView({ global, setGlobal, output, setOutput, characters }: Props) {
+export function GlobalLayerView({ global, setGlobal, output, setOutput, characters, scenes, props, onAutoGenShots }: Props) {
   const t = useT();
   const renderField = (id: string) => {
     const g = { value: global, set: setGlobal };
@@ -35,12 +39,13 @@ export function GlobalLayerView({ global, setGlobal, output, setOutput, characte
       case "duration":   return <FDuration {...g} />;
       case "ratio":      return <FRatio {...g} />;
       case "resolution": return <FResolution {...g} />;
-      case "scene":      return <FScene {...g} />;
+      case "scene":      return <FScene {...g} scenes={scenes} />;
       case "position":   return <FPosition {...g} />;
-      case "prop":       return <FProp {...g} />;
+      case "prop":       return <FProp {...g} props={props} />;
+      case "storyboard": return <FStoryboard {...g} />;
       case "style":      return <FStyle {...g} />;
       case "characters": return <FCharacters {...g} characters={characters} />;
-      case "story":      return <FStory {...g} />;
+      case "story":      return <FStory {...g} onAutoGenShots={onAutoGenShots} />;
       case "imageQuality": return <FImageQuality {...g} />;
       case "ambientSfx": return <FAmbientSfx {...o} />;
       case "subtitle":   return <FSubtitle {...o} />;

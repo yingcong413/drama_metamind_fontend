@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
 import { Placeholder } from "@/components/primitives/Placeholder";
 import { Upload } from "@/components/primitives/Upload";
+import { ZoomableImage } from "@/components/primitives/ZoomableImage";
 import { filenameFromUrl, isLoadableUrl } from "@/lib/format";
 import { t, useT } from "@/lib/i18n";
 import { uploadGlobalImage } from "@/lib/uploadGlobalImage";
@@ -70,9 +71,9 @@ export function FPosition({ value, set }: Props) {
           borderRadius: 6, overflow: "hidden",
         }}
       >
-        {canRender ? (
-          <img
-            src={url ?? undefined}
+        {canRender && url ? (
+          <ZoomableImage
+            src={url}
             alt={displayName}
             onError={() => setImgBroken(true)}
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}

@@ -7,8 +7,10 @@ import type {
   Project,
   ProjectListItem,
   ProjectStatus,
+  Prop,
   RechargePackage,
   RechargeRecord,
+  Scene,
   TaskStatus,
   TaskTypeInfo,
 } from "@/types";
@@ -95,6 +97,8 @@ const _DEMO_PROJECT_TEMPLATE_UNUSED: Record<string, Project> = {
       total_duration_seconds: 11,
       ratio: "16:9",
       resolution: "720p",
+      scenes: [],
+      props: [],
       // Volcano 官方公开 demo 资源(来自 seedance2_final.py),URL 真实可访问,
       // 测试者无需自己上传素材即可端到端跑通生成
       scene_image:
@@ -210,6 +214,8 @@ const blankProject = (id: string): Project => ({
     total_duration_seconds: null,
     ratio: "16:9",
     resolution: "720p",
+    scenes: [],
+    props: [],
     scene_image: null,
     position_image_url: null,
     prop_image_url: null,
@@ -420,6 +426,94 @@ export async function mockDeleteCharacter(id: string): Promise<void> {
   if (idx !== -1) {
     MOCK_CHARACTERS.splice(idx, 1);
     persistCharacters();
+  }
+}
+
+// === Scenes（场景库）====================================================
+const DEFAULT_SCENES: Scene[] = [];
+export const MOCK_SCENES: Scene[] = loadJSON<Scene[]>("scenes", DEFAULT_SCENES);
+
+function persistScenes() {
+  saveJSON("scenes", MOCK_SCENES);
+}
+
+export type SceneUpsert = { name: string; image_url: string | null; hue: number };
+
+export async function mockListScenes(): Promise<Scene[]> {
+  await delay(120);
+  return MOCK_SCENES.map((s) => ({ ...s }));
+}
+
+export async function mockCreateScene(input: SceneUpsert): Promise<Scene> {
+  await delay(180);
+  const id = "s_" + Date.now().toString(36);
+  const now = new Date().toISOString();
+  const s: Scene = { ...input, id, created_at: now, updated_at: now };
+  MOCK_SCENES.push(s);
+  persistScenes();
+  return s;
+}
+
+export async function mockUpdateScene(id: string, patch: Partial<SceneUpsert>): Promise<Scene> {
+  await delay(160);
+  const idx = MOCK_SCENES.findIndex((s) => s.id === id);
+  if (idx === -1) throw new Error("场景不存在");
+  const merged: Scene = { ...MOCK_SCENES[idx], ...patch, updated_at: new Date().toISOString() };
+  MOCK_SCENES[idx] = merged;
+  persistScenes();
+  return merged;
+}
+
+export async function mockDeleteScene(id: string): Promise<void> {
+  await delay(140);
+  const idx = MOCK_SCENES.findIndex((s) => s.id === id);
+  if (idx !== -1) {
+    MOCK_SCENES.splice(idx, 1);
+    persistScenes();
+  }
+}
+
+// === Props（道具库）=====================================================
+const DEFAULT_PROPS: Prop[] = [];
+export const MOCK_PROPS: Prop[] = loadJSON<Prop[]>("props", DEFAULT_PROPS);
+
+function persistProps() {
+  saveJSON("props", MOCK_PROPS);
+}
+
+export type PropUpsert = { name: string; image_url: string | null; hue: number };
+
+export async function mockListProps(): Promise<Prop[]> {
+  await delay(120);
+  return MOCK_PROPS.map((p) => ({ ...p }));
+}
+
+export async function mockCreateProp(input: PropUpsert): Promise<Prop> {
+  await delay(180);
+  const id = "p_" + Date.now().toString(36);
+  const now = new Date().toISOString();
+  const p: Prop = { ...input, id, created_at: now, updated_at: now };
+  MOCK_PROPS.push(p);
+  persistProps();
+  return p;
+}
+
+export async function mockUpdateProp(id: string, patch: Partial<PropUpsert>): Promise<Prop> {
+  await delay(160);
+  const idx = MOCK_PROPS.findIndex((p) => p.id === id);
+  if (idx === -1) throw new Error("道具不存在");
+  const merged: Prop = { ...MOCK_PROPS[idx], ...patch, updated_at: new Date().toISOString() };
+  MOCK_PROPS[idx] = merged;
+  persistProps();
+  return merged;
+}
+
+export async function mockDeleteProp(id: string): Promise<void> {
+  await delay(140);
+  const idx = MOCK_PROPS.findIndex((p) => p.id === id);
+  if (idx !== -1) {
+    MOCK_PROPS.splice(idx, 1);
+    persistProps();
   }
 }
 
@@ -653,7 +747,19 @@ function randTask(i: number): GenerationTask {
     output_video_url: status === "success" ? "mock-video.mp4" : null,
     output_master_url: status === "success" ? "mock-master.mov" : null,
     thumbnail_urls: [],
-    prompt: null,
+    prompt:
+      status === "success"
+        ? {
+            version: "v1",
+            structured_json: null,
+            natural_text:
+              `【全局设定】\n时间：黄昏。场景：老式咖啡馆，暖色灯光。影像风格：电影感，浅景深，35mm 胶片质感。\n\n` +
+              `【出场角色】林夏（女主，25 岁，米色风衣）、陈默（男主，28 岁，深灰大衣）。\n\n` +
+              `【分镜 ${1 + (i % 4)}】\n动作：林夏推门而入，环顾四周后走向靠窗座位。\n运镜：缓慢跟随推镜，由全景推至中近景。\n台词：「你来得比我想的早。」\n音效：门铃轻响、环境人声。\n\n` +
+              `【输出】分辨率 ${resolution} · 时长 ${videoLen}s · 自动字幕 + 轻柔钢琴背景音乐。`,
+            locked: false,
+          }
+        : null,
   };
 }
 

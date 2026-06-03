@@ -61,7 +61,7 @@ export interface CreateTaskRequest {
   channel_id?: number;
   upstream_task_id?: string | null;
   video_len_seconds?: number;
-  resolution?: "720p" | "1080p" | "4k";
+  resolution?: "480p" | "720p" | "1080p" | "4k";
   prompt?: PromptSnapshot | unknown;
 }
 

@@ -1,4 +1,4 @@
-# 制影 AI · 短剧工坊 — 前后端接口契约 v0.5
+# 制影 AI · 短剧工坊 — 前后端接口契约 v0.6
 
 > 本文档基于 Claude Design 输出的 UI 原型（`metamind_duanju-handoff.zip`）梳理而来，覆盖原型中全部交互点。
 > 前端：React + TypeScript。后端：Go。AI 视频生成调用「new API（ApiGo VIP）」平台模型，由后端代理，前端只与本服务交互。
@@ -118,10 +118,26 @@ export interface Character {
   voice_sample_url: string | null;  // 声线参考音频
   hue: number;            // 0-360，用于无参考图时占位的 avatar 色相
   has_ref: boolean;       // = ref_image_url != null（后端计算返回）
+  has_variants?: boolean; // ★v0.6 是否启用「角色变体」（多套造型）
+  variants?: CharacterVariant[]; // ★v0.6 角色变体列表（has_variants=true 时生效）
   created_at: string;
   updated_at: string;
 }
+
+// ★v0.6 角色变体：同一角色的不同造型/形态。每个变体自带名字 / 描述 / 主图 / 多角度图 / 声线，
+// 直接存在角色记录上（轻量，图片/音频为 http(s) URL 或本地 base64 data URL）。
+// 项目侧通过 GlobalLayer.character_variants（角色id → 变体id）选择本剧调用哪个变体。
+export interface CharacterVariant {
+  id: string;
+  name: string;           // 变体名（如「古装造型」「战损版」）
+  desc: string;           // 变体描述
+  image_url: string | null;   // 主图
+  angle_images: string[];     // 多角度图
+  voice_url: string | null;   // 声音参考
+}
 ```
+
+> ⚠️ 注：本文档的 `Character` 块为精简契约视图；当前代码 `types/character.ts` 还含 `org_id` / `asset_provider` / `ark_group_id` / `ark_project_name` / `asset_bundle`（火山方舟素材体系，已上线）等字段——那些非本次变更，沿用既有约定。本次仅新增 `has_variants` / `variants`。变体素材当前为轻量 URL（演示/留存级），**尚未接入 Seedance 素材引用（asset:// / ark_asset_id）**，生成管线消费变体的方案待后端对齐。
 
 ```go
 // back: internal/model/character.go
@@ -163,17 +179,44 @@ export interface Project {
   updated_at: string;
 }
 
-// 全局层（编辑器「全局场景层」面板，字段 01-10）
+// 全局层（编辑器「全局场景层」面板）。
+// ⚠️ v0.6 起本块已对齐当前前端代码 types/project.ts，字段较 v0.4 文档有较大变化：
+//   场景/道具改为「库 id 数组 + 派生单图」；新增 比例/分辨率/画质/分镜头脚本/角色变体/首尾帧·智能多帧。
+//   契约以 JSON 字段名为准；左侧 UI 字段编号因「07 分镜头脚本」插入而整体后移，不影响 JSON。
 export interface GlobalLayer {
-  total_duration_seconds: number | null; // 01 视频总时长（必填，秒；常用 5/10/15，也可自定义正整数）
-  scene_images: string[];                // 02 场景参考图 URL（单图，数组长度 ≤ 1；多视角请拼成一张）
-  scene_selected: number | null;         // 生效索引（单图时为 0 或 null）
-  position_image_url: string | null;     // 03 站位图（单图）
-  style: string[];                       // 04 影像风格（单选，数组长度 ≤ 1）
-  characters: string[];                  // 05 角色 ID 列表（必填）
-  story: string;                         // 06 故事内容（必填，建议 50-200 字）
-  // 07 环境音效 / 08 字幕 / 09 背景音乐 → 见 OutputLayer
-  narration_audio_url: string | null;    // 10 旁白音频：整支视频统一上传的旁白配音（可选）
+  total_duration_seconds: number | null;     // 视频总时长（秒，必填；Seedance 支持 5/8/11，自定义向上对齐）
+  ratio: "16:9" | "9:16" | "1:1" | "adaptive" | null;     // 画面比例（null=默认 16:9）
+  resolution: "480p" | "720p" | "1080p" | "4k" | null;    // 视频分辨率（null=默认 720p；★v0.6 新增 480p 档）
+  scenes: string[];                           // 场景库 id 列表（多选，跨项目复用；[0]=主场景）
+  scene_image: string | null;                 // 由 scenes[0] 参考图派生（单图），prompt 实际读它
+  position_image_url: string | null;          // 站位图（单图）
+  props: string[];                            // 道具库 id 列表（多选；[0]=主道具）
+  prop_image_url: string | null;              // 由 props[0] 参考图派生（单图）
+  storyboard_image_url?: string | null;       // ★v0.6 分镜头脚本图（宫格图，单图）；仅留存/参考，不进 prompt
+  style: string[];                            // 影像风格（单选，len ≤ 1）
+  characters: string[];                       // 角色 id 列表（必填）
+  character_variants?: Record<string, string>;// ★v0.6 角色变体选择：{角色id: 变体id}；缺省=默认形象。详见 §2.1
+  story: string;                              // 故事内容（必填，建议 50-200 字）
+  image_quality: string;                      // 画质内容（可选，拼进 prompt 画质 tail，如「4K 锐利、电影感」）
+  narration_audio_url: string | null;         // 旁白音频：整支视频统一上传（可选）
+  // 环境音效 / 字幕 / 生成音频 / 背景音乐 → 见 OutputLayer
+
+  // ───── ★v0.6「首尾帧 / 智能多帧」模式（与常规模式分开的独立画面数据）─────
+  // ⚠️ 当前仅前端留存/回显（随 project 一起存取），尚未接入生成管线。后端先做透传持久化。
+  frame_prompt?: string;                      // 文字描述
+  first_frame_url?: string | null;            // 首尾帧 · 首帧
+  last_frame_url?: string | null;             // 首尾帧 · 尾帧
+  multi_frame_urls?: string[];                // 智能多帧 · 关键帧图片数组
+  multi_frame_segments?: FrameSegment[];      // 智能多帧 · 每个关键帧前后的「段」（len = 帧数 + 1）
+  frame_ratio?: string;                       // 比例（21:9/16:9/4:3/1:1/3:4/9:16，与上面 ratio 解耦）
+  frame_resolution?: string;                  // 清晰度（"720P" / "1080P"）
+  // 首尾帧/智能多帧的「时长」复用 total_duration_seconds（取值 4–15s）
+}
+
+// ★v0.6 智能多帧:相邻关键帧之间(及首/尾)的「段」——秒数 + 运镜/画面描述
+export interface FrameSegment {
+  seconds: number;                            // 该段时长（秒，可为 0 或小数，如 1.5）
+  desc: string;                               // 运镜 / 画面描述（「应用至全部」可一次性套到所有段的 seconds）
 }
 
 // 分镜层（字段 11-20；另有步骤 00「本分镜出场角色」对应 cast_ids）
@@ -215,11 +258,12 @@ export interface SpeechBlock {
   audio_url: string | null;          // 客户端不再上传；后端用角色参考音色合成后回填结果 URL（入参恒为 null）
 }
 
-// 输出层（随 global 一起在「全局场景层」面板展示，字段 07-09）
+// 输出层（随 global 一起在「全局场景层」面板展示）
 export interface OutputLayer {
-  ambient_sfx: string;               // 07 环境音效
-  subtitle: boolean;                 // 08 字幕
-  music: boolean;                    // 09 背景音乐
+  ambient_sfx: string;               // 环境音效
+  subtitle: boolean;                 // 字幕（默认关闭）
+  music: boolean;                    // 背景音乐（默认关闭）
+  generate_audio: boolean;           // 是否让模型生成音频（对应 Seedance API 顶层 generate_audio；默认 true，关闭则全片无声）
 }
 ```
 
@@ -259,14 +303,34 @@ type Project struct {
 }
 
 type GlobalLayer struct {
-    TotalDurationSeconds *int     `json:"total_duration_seconds"` // 01 必填
-    SceneImages          []string `json:"scene_images"`           // 02 单图，len ≤ 1
-    SceneSelected        *int     `json:"scene_selected"`
-    PositionImageURL     *string  `json:"position_image_url"`     // 03 单图
-    Style                []string `json:"style"`                  // 04 单选，len ≤ 1
-    Characters           []string `json:"characters"`             // 05 必填
-    Story                string   `json:"story"`                  // 06 必填
-    NarrationAudioURL    *string  `json:"narration_audio_url"`    // 10 旁白音频，整支视频统一上传
+    TotalDurationSeconds *int     `json:"total_duration_seconds"` // 必填
+    Ratio                *string  `json:"ratio"`                  // 16:9 | 9:16 | 1:1 | adaptive | null
+    Resolution           *string  `json:"resolution"`             // 480p | 720p | 1080p | 4k | null（★480p 新增）
+    Scenes               []string `json:"scenes"`                 // 场景库 id 列表（[0]=主场景）
+    SceneImage           *string  `json:"scene_image"`            // 由 scenes[0] 派生（单图）
+    PositionImageURL     *string  `json:"position_image_url"`     // 站位图（单图）
+    Props                []string `json:"props"`                  // 道具库 id 列表（[0]=主道具）
+    PropImageURL         *string  `json:"prop_image_url"`         // 由 props[0] 派生（单图）
+    StoryboardImageURL   *string  `json:"storyboard_image_url"`   // ★v0.6 分镜头脚本图（单图，仅留存）
+    Style                []string `json:"style"`                  // 单选，len ≤ 1
+    Characters           []string `json:"characters"`             // 必填
+    CharacterVariants    map[string]string `json:"character_variants" gorm:"serializer:json"` // ★v0.6 角色id→变体id
+    Story                string   `json:"story"`                  // 必填
+    ImageQuality         string   `json:"image_quality"`          // 画质内容（可选）
+    NarrationAudioURL    *string  `json:"narration_audio_url"`    // 旁白音频，整支视频统一上传
+    // ★v0.6 首尾帧 / 智能多帧（仅透传持久化，未接生成管线）
+    FramePrompt          *string       `json:"frame_prompt"`
+    FirstFrameURL        *string       `json:"first_frame_url"`
+    LastFrameURL         *string       `json:"last_frame_url"`
+    MultiFrameURLs       []string      `json:"multi_frame_urls" gorm:"serializer:json"`
+    MultiFrameSegments   []FrameSegment `json:"multi_frame_segments" gorm:"serializer:json"`
+    FrameRatio           *string       `json:"frame_ratio"`
+    FrameResolution      *string       `json:"frame_resolution"`
+}
+
+type FrameSegment struct {
+    Seconds float64 `json:"seconds"` // 可为小数（如 1.5）
+    Desc    string  `json:"desc"`
 }
 
 type Shot struct {
@@ -320,7 +384,7 @@ export interface GenerationTask {
   end_time: string | null;
   duration_seconds: number;    // 实际处理耗时
   video_len_seconds: number;   // 输出视频时长（8/16/24/32）
-  resolution: "720p" | "1080p";
+  resolution: "480p" | "720p" | "1080p" | "4k";  // ★v0.6 由 "720p"|"1080p" 扩为 4 档（前端生成入参 CreateTaskInput 同步）
   cost_cents: number;          // 已扣费金额（分）
   fail_reason: string | null;
   // 成功时填充
@@ -397,6 +461,52 @@ export interface RechargeRecord {
   credits_cents: number;          // 充值得到的余额
   bonus_cents: number;            // 赠送
   status: RechargeRecordStatus;
+}
+```
+
+### 2.5 场景库 Scene / 道具库 Prop（★v0.6 新增）
+
+跨项目复用的**轻量全局资源**（区别于角色库的重型 `asset_bundle` / `ark_group` 体系），只含「名字 + 参考图」。
+编辑器「场景」「道具」字段通过 id 引用（`GlobalLayer.scenes` / `GlobalLayer.props`）。
+**前端校验**：名字与参考图均为必填（创建/保存时两者皆不可为空）。
+
+```typescript
+// front: types/scene.ts
+export interface Scene {
+  id: string;                      // sc_xxx
+  name: string;                    // 必填
+  image_url: string | null;        // 参考图（TOS 公网 URL 或本地 base64 data URL）；前端要求必填
+  hue: number;                     // 0-360，无图时占位色相（后端按 name hash 生成）
+  created_at: string;
+  updated_at: string;
+}
+
+// front: types/prop.ts —— 结构与 Scene 完全一致（id 前缀 pr_xxx）
+export interface Prop {
+  id: string;
+  name: string;
+  image_url: string | null;
+  hue: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// 创建 / 更新入参（去掉 id、时间戳；hue 由后端生成可不传）
+export type SceneUpsert = { name: string; image_url: string | null; hue: number };
+export type PropUpsert  = { name: string; image_url: string | null; hue: number };
+```
+
+```go
+// back: internal/model/scene.go（Prop 同构）
+type Scene struct {
+    ID        string         `json:"id" gorm:"primaryKey"`
+    UserID    string         `json:"-"`   // 或 OrgID，按角色库一致口径
+    Name      string         `json:"name"`
+    ImageURL  *string        `json:"image_url"`
+    Hue       int            `json:"hue"`
+    CreatedAt time.Time      `json:"created_at"`
+    UpdatedAt time.Time      `json:"updated_at"`
+    DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 ```
 
@@ -749,10 +859,32 @@ Query：
     { "id": "vidu_pro", "name": "Vidu · pro", "upstream_model": "vidu-pro" },
     { "id": "moyun", "name": "墨韵", "upstream_model": "moyun-v1" }
   ],
-  "resolutions": ["720p","1080p"],
+  "resolutions": ["480p","720p","1080p"],
   "video_lengths": [8, 16, 24, 32]
 }}
 ```
+
+> ★v0.6：`resolutions` 增加 `480p`（前端「03 视频分辨率」首档）。
+> 注：「首尾帧 / 智能多帧」模式用的比例集（`21:9/16:9/4:3/1:1/3:4/9:16`）目前由前端硬编码、存进 `GlobalLayer.frame_ratio`（自由字符串），暂不走 `/meta/options`。
+
+---
+
+### 3.9 场景库 / 道具库（★v0.6 新增）
+
+| Method | Path           | 说明                       |
+| ------ | -------------- | -------------------------- |
+| GET    | `/scenes`      | 场景列表（扁平数组）       |
+| POST   | `/scenes`      | 新建场景                   |
+| PATCH  | `/scenes/:id`  | 更新场景                   |
+| DELETE | `/scenes/:id`  | 删除场景                   |
+| GET    | `/props`       | 道具列表（扁平数组）       |
+| POST   | `/props`       | 新建道具                   |
+| PATCH  | `/props/:id`   | 更新道具                   |
+| DELETE | `/props/:id`   | 删除道具                   |
+
+- 与 `/characters` 一致：`GET` **返回扁平数组**（非分页），前端整体加载缓存。
+- `POST` / `PATCH` 请求体见 `SceneUpsert` / `PropUpsert`（§2.5）。`hue` 可由后端按 `name` hash 生成。
+- 删除前若被某项目 `global.scenes` / `global.props` 引用，处理策略同角色删除（见 §5.5，建议阻止 + 返回引用列表）。
 
 ---
 
@@ -795,6 +927,12 @@ Query：
 | **账户页** "导出 .csv"                | `GET /tasks/export.csv?...`（直接走浏览器下载）                          |
 | **充值弹窗** 加载                     | `GET /account/packages`                                                  |
 | **充值弹窗** "确认支付"               | `POST /account/recharges` → 展示 QR / 跳转，期间轮询 `GET .../:id`       |
+| **场景库 / 道具库** 加载（★v0.6）     | `GET /scenes` / `GET /props`                                             |
+| **场景库 / 道具库** 新建 / 保存 / 删除 | `POST·PATCH·DELETE /scenes·/props`                                       |
+| **角色库** 抽屉「角色变体」上传主图/多角度/声线（★v0.6） | `POST /uploads/image` · `/uploads/audio` → 写入 `variant.image_url / angle_images / voice_url`，随 `PATCH /characters/:id` 落库 |
+| **编辑器** 顶栏模式切换 常规/首尾帧/智能多帧（★v0.6） | 纯前端状态(`metamind-genmode` localStorage)，不调接口                  |
+| **编辑器** 首尾帧/智能多帧「生成视频」（★v0.6） | 复用 `POST /projects/:id/generations`（管线消费 frame_* 字段待对齐）   |
+| **编辑器** 首尾帧/智能多帧下方「生成记录」（★v0.6） | `GET /tasks?...`（同使用记录）；点击行 `GET /tasks/:id` 看视频/提示词  |
 
 ---
 
@@ -828,4 +966,5 @@ Query：
 | v0.2   | 2026-05-18   | 按 v0.1 前端实际代码对齐:`GenerationTask.type` 改为对象 `TaskTypeInfo`、补 `user` 字段;`/account/recharges` 列表响应明确为 `RechargeRecord[]`(新增类型);`/characters` 当前返回扁平数组而非分页;新增 §3.0 P0 接入清单 |
 | v0.3   | 2026-05-18   | 旁白音频改为全局统一上传:`GlobalLayer` 新增 `narration_audio_url`;分镜的台词/内心独白/旁白改为**仅文字**,台词/独白配音由角色 `voice_sample_url` 后端合成回填 `SpeechBlock.audio_url`;`/uploads/audio` 的 `purpose` 收敛为 `narration`(全局旁白)\| `voice_sample`(角色声线) |
 | v0.5   | 2026-06-01   | 新增 §1.6 国际化：前端支持 6 语言（zh-CN/zh-TW/en/fr/es/ar，ar 为 RTL），纯前端展示层翻译、语言偏好仅存 localStorage。明确约束：① `/meta/options` 枚举、`Character.role/tags`、`camera` 的 速度/幅度/方向、项目/分镜默认名等**保持中文 canonical 值且需稳定**（同时是翻译表 key），后端不本地化；② 后端 `message`/`errors[].msg` 仍为中文，前端无法本地化任意串。§5 新增待对齐项 14（后端消息本地化策略）、15（语言偏好是否落后端）。纯 CSS/交互改动不影响契约。 |
+| v0.6   | 2026-06-03   | 本期新模块整体同步：① **场景库 / 道具库**（新增 `Scene`/`Prop` 轻量模型 §2.5 + `/scenes`·`/props` CRUD §3.9，扁平数组；名字+参考图均必填）；② **角色变体** `Character.has_variants`/`variants`（`CharacterVariant`：名字/描述/主图/多角度图/声线），项目侧 `GlobalLayer.character_variants`（角色id→变体id）选择调用哪个变体；③ **分镜头脚本图** `GlobalLayer.storyboard_image_url`（宫格图，可手动上传或大模型生成后导入，仅留存不进 prompt）；④ **首尾帧 / 智能多帧** 模式：`GlobalLayer.frame_prompt`/`first_frame_url`/`last_frame_url`/`multi_frame_urls`/`multi_frame_segments`(`FrameSegment`{seconds,desc})/`frame_ratio`/`frame_resolution`（**当前仅前端留存，未接生成管线**）；⑤ **分辨率新增 `480p`**（`GlobalLayer.resolution` / `GenerationTask.resolution` / CreateTaskInput / `/meta/options.resolutions`）；⑥ `OutputLayer` 补 `generate_audio`；⑦ §2.2 `GlobalLayer` 整块对齐当前代码（场景/道具改为「库 id 数组 + 派生单图」`scenes`/`props`/`scene_image`/`prop_image_url`，新增 `ratio`/`resolution`/`image_quality`）。⚠️ 变体素材/首尾帧·多帧画面均为轻量 URL，尚未接入 Seedance 素材引用与生成管线，消费方案待后端对齐。i18n 仅前端补词典，不影响契约。 |
 | v0.4   | 2026-05-18   | 按编辑器最新改动整体对齐:① 移除时间模块(`GlobalLayer.season/time_of_day` 删除,`/meta/options` 去掉 `seasons/time_of_day`);② `GlobalLayer` 新增 `total_duration_seconds`(视频总时长,必填);③ `Shot` 新增 `shot_size`(景别,单选,见 §2.2.1)、`duration_seconds`(分镜时长,选填)、`action_strength/micro_strength/gesture_strength`(强度 0-100,默认 65);④ `global.style`、`shot.camera` 改为**单选**(数组长度 ≤ 1);⑤ 场景/站位图均为**单图**;⑥ 字段编号整体重排:全局 01-10、分镜 11-20(另有分镜步骤 00 出场角色);⑦ `/meta/options.styles` 更新为实际 5 项并新增 `shot_sizes`;§3.4 校验规则补充 |

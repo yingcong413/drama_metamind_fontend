@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { EditorPage } from "@/pages/editor/EditorPage";
 import { CharactersPage } from "@/pages/characters/CharactersPage";
+import { ScenesPage } from "@/pages/scenes/ScenesPage";
+import { PropsPage } from "@/pages/props/PropsPage";
 import { ResultPage } from "@/pages/result/ResultPage";
 import { AccountPage } from "@/pages/account/AccountPage";
 import { OrgPage } from "@/pages/org/OrgPage";
@@ -27,6 +29,8 @@ export const router = createBrowserRouter([
   { path: "/editor",                 element: <RequireAuth><EditorPage /></RequireAuth> },
   { path: "/projects/:id/edit",      element: <RequireAuth><EditorPage /></RequireAuth> },
   { path: "/characters",             element: <RequireAuth><CharactersPage /></RequireAuth> },
+  { path: "/scenes",                 element: <RequireAuth><ScenesPage /></RequireAuth> },
+  { path: "/props",                  element: <RequireAuth><PropsPage /></RequireAuth> },
   { path: "/result",                 element: <RequireAuth><ResultPage /></RequireAuth> },
   { path: "/projects/:id/result",    element: <RequireAuth><ResultPage /></RequireAuth> },
   { path: "/account",                element: <RequireAuth><AccountPage /></RequireAuth> },
