@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { CloseIcon, CopyIcon } from "@/components/icons";
 import { useT, useTf } from "@/lib/i18n";
 import { buildPromptText } from "@/lib/naturalLanguage";
+import { useIsVerificationAccount } from "@/stores/auth";
 import type { Character, Project } from "@/types";
 
 interface Props {
@@ -13,10 +14,11 @@ interface Props {
 export function PromptPreviewModal({ project, characters, onClose }: Props) {
   const t = useT();
   const tf = useTf();
+  const canSeePrompt = useIsVerificationAccount();
   // 与生成视频弹窗共用同一份拼接逻辑(lib/naturalLanguage.ts 的 buildPromptText)
   const text = useMemo(
-    () => buildPromptText(project, characters),
-    [project, characters],
+    () => (canSeePrompt ? buildPromptText(project, characters) : ""),
+    [project, characters, canSeePrompt],
   );
 
   const [copied, setCopied] = useState(false);

@@ -27,7 +27,7 @@ export function PasswordForm({ account, setAccount, password, setPassword, remem
       <Field title={t("账号")}>
         <input
           className="input input-lg"
-          placeholder={t("手机号 / 邮箱 / 账号")}
+          placeholder={t("手机号 / 姓名 / 邮箱 / 账号")}
           autoComplete="username"
           value={account}
           onChange={(e) => setAccount(e.target.value)}

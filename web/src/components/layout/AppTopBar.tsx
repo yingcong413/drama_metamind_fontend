@@ -221,6 +221,28 @@ export function AppTopBar({ crumbs = [], actions, leftExtra, hideNav = false }: 
                   </span>
                 </MenuItem>
               )}
+              {isPlatformAdmin && (
+                <MenuItem onClick={() => go("/admin/projects")}>
+                  {t("平台管理 · 所有项目")}
+                  <span
+                    className="dim-2 mono"
+                    style={{ fontSize: 10, marginLeft: 6, color: "oklch(72% .14 70)" }}
+                  >
+                    ADMIN
+                  </span>
+                </MenuItem>
+              )}
+              {isPlatformAdmin && (
+                <MenuItem onClick={() => go("/admin/users")}>
+                  {t("平台管理 · 账号管理")}
+                  <span
+                    className="dim-2 mono"
+                    style={{ fontSize: 10, marginLeft: 6, color: "oklch(72% .14 70)" }}
+                  >
+                    ADMIN
+                  </span>
+                </MenuItem>
+              )}
               <MenuItem
                 onClick={() => {
                   setMenuOpen(false);

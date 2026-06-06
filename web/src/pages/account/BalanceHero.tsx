@@ -22,6 +22,22 @@ export function BalanceHero({ account, onRecharge }: Props) {
   const isMember = user?.role === "member";
   const orgName = user?.org?.name;
 
+  // 「较上月」真实环比:有上月数据才算百分比,否则给出合理文案(不再写死 ↓12%)
+  const curSpent = account.this_month.spent_cents;
+  const prevSpent = account.this_month.prev_month_spent_cents ?? 0;
+  let momText: string;
+  if (prevSpent > 0) {
+    const pct = Math.round(((curSpent - prevSpent) / prevSpent) * 100);
+    momText =
+      pct === 0
+        ? t("较上月持平")
+        : tf(pct > 0 ? "较上月 ↑ {pct}%" : "较上月 ↓ {pct}%", { pct: Math.abs(pct) });
+  } else if (curSpent > 0) {
+    momText = t("上月无消费");
+  } else {
+    momText = t("本月暂无消费");
+  }
+
   return (
     <section className="acc-hero">
       <div className="acc-hero-main">
@@ -90,7 +106,7 @@ export function BalanceHero({ account, onRecharge }: Props) {
             <span className="cur">¥</span>
             <span className="mono">{formatYuanInt(account.this_month.spent_cents)}</span>
           </div>
-          <div className="acc-stat-foot mono dim-2">{t("较上月 ↓ 12%")}</div>
+          <div className="acc-stat-foot mono dim-2">{momText}</div>
         </div>
         <div className="acc-stat">
           <div className="acc-stat-label mono">{t("本月生成")}</div>

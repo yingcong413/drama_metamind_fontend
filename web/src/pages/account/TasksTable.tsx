@@ -19,6 +19,7 @@ export function TasksTable({ rows, onPreview }: Props) {
         <div className="tasks-thead">
           <div className="th time">{t("提交时间")}</div>
           <div className="th time">{t("结束时间")}</div>
+          <div className="th kind">{t("类型")}</div>
           <div className="th dur">{t("耗时")}</div>
           <div className="th vlen">{t("时长")}</div>
           <div className="th res">{t("清晰度")}</div>
@@ -34,7 +35,19 @@ export function TasksTable({ rows, onPreview }: Props) {
             <div style={{ marginTop: 4 }}>{t("当前筛选条件下没有记录")}</div>
           </div>
         ) : (
-          rows.map((task) => (
+          rows.map((task) => {
+            const typeId = task.type?.id;
+            // AI 调用统一用 platform=metamind 标记;模型名带 image 的算出图,否则算文本。
+            // 这样即便后端旧版把 type_id 兜底成 i2v,也能正确归类(不依赖后端是否已重启)。
+            const isAiPlatform = task.platform === "metamind";
+            const modelIsImage = /image/i.test(task.upstream_model || "");
+            const isImage = typeId === "ai_image" || (isAiPlatform && modelIsImage);
+            const isText = typeId === "ai_text" || (isAiPlatform && !modelIsImage);
+            const isVideo = !isImage && !isText;
+            const isAi = isImage || isText;
+            const kindLabel = isImage ? t("图片") : isText ? t("文字") : isVideo ? t("视频") : t("其他");
+            const kindClass = isImage ? "kind-image" : isText ? "kind-text" : isVideo ? "kind-video" : "";
+            return (
             <div
               key={task.id}
               className={cn("tasks-row", `status-${task.status}`)}
@@ -44,16 +57,27 @@ export function TasksTable({ rows, onPreview }: Props) {
             >
               <div className="td time mono">{formatDateTime(task.submit_time)}</div>
               <div className="td time mono">{task.end_time ? formatDateTime(task.end_time) : "—"}</div>
+              <div className="td kind">
+                <span className={cn("kind-chip", kindClass)}>{kindLabel}</span>
+              </div>
               <div className="td dur">
                 <span className={cn("tag-dur", task.duration_seconds > 300 && "long")}>
                   {task.duration_seconds} s
                 </span>
               </div>
               <div className="td vlen">
-                <span className="vlen-chip mono">{task.video_len_seconds} s</span>
+                {isVideo ? (
+                  <span className="vlen-chip mono">{task.video_len_seconds} s</span>
+                ) : (
+                  <span className="dim-2 mono">—</span>
+                )}
               </div>
               <div className="td res">
-                <span className={cn("res-chip mono", `res-${task.resolution}`)}>{task.resolution}</span>
+                {isVideo ? (
+                  <span className={cn("res-chip mono", `res-${task.resolution}`)}>{task.resolution}</span>
+                ) : (
+                  <span className="dim-2 mono">—</span>
+                )}
               </div>
               <div className="td user">
                 <div
@@ -79,7 +103,10 @@ export function TasksTable({ rows, onPreview }: Props) {
                 )}
               </div>
               <div className="td action">
-                {task.status === "success" ? (
+                {isAi ? (
+                  // AI 出图 / AI 文本只是计费用量,没有视频可预览
+                  <span className="dim-2" style={{ fontSize: 11 }}>{kindLabel}</span>
+                ) : task.status === "success" ? (
                   <button className="btn-link" onClick={() => onPreview(task)}>
                     <PlayIcon /> {t("点击预览视频")}
                   </button>
@@ -92,7 +119,8 @@ export function TasksTable({ rows, onPreview }: Props) {
                 )}
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

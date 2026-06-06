@@ -29,6 +29,10 @@ export interface User {
   org: Organization | null;
   /** v0.9.1 §1.5.6 平台管理员标志;跨 org,与 role(Owner/Member) 正交 */
   is_platform_admin?: boolean;
+  /** 验证账号:仅其能看到生成视频的提示词 / JSON(平台管理员设置) */
+  is_verification_account?: boolean;
+  /** 本月额度(分);0 或缺省 = 不限额 */
+  monthly_quota_cents?: number;
 }
 
 export interface LoginResponse {

@@ -17,7 +17,6 @@ import { useAssetPolling } from "@/hooks/useAssetPolling";
 import { validateAssetFile } from "@/lib/assetValidator";
 import { useT, useTf } from "@/lib/i18n";
 import { TrashIcon, UploadIcon, MicIcon } from "@/components/icons";
-import { ZoomableImage } from "@/components/primitives/ZoomableImage";
 import type { Asset, AssetKind, AssetRole } from "@/types";
 import { AssetStatusBadge } from "./AssetStatusBadge";
 
@@ -125,9 +124,9 @@ export function SingleAssetSlot({
             borderRadius: 8,
           }}
         >
-          {kind === "image" && current.thumbnail_url && current.status === "active" ? (
-            <ZoomableImage
-              src={current.thumbnail_url}
+          {kind === "image" && (current.thumbnail_url || current.url) ? (
+            <img
+              src={current.thumbnail_url || current.url || undefined}
               alt={current.original_filename}
               style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }}
             />
@@ -329,9 +328,9 @@ function MultiThumb({
         background: "var(--surface-soft, #F3F4F6)",
       }}
     >
-      {current.thumbnail_url && current.status === "active" ? (
-        <ZoomableImage
-          src={current.thumbnail_url}
+      {current.thumbnail_url || current.url ? (
+        <img
+          src={current.thumbnail_url || current.url || undefined}
           alt={current.original_filename}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />

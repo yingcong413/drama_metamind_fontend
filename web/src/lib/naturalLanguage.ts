@@ -13,14 +13,26 @@ import { CAMERA_MOVES, SHOT_SIZES } from "@/lib/fieldDefs";
 export interface AssetIndexMap {
   /** character_id → images 数组中的下标（0-based） */
   characterImage: Record<string, number>;
-  /** 场景图在 images 中的下标，未上传为 -1 */
-  scene: number;
+  /** 多场景:每个选中场景的 名字 + 图下标（idx=-1 表示该场景无图，仅文字提及） */
+  scenes: Array<{ name: string; idx: number }>;
   /** 站位草图在 images 中的下标，未上传为 -1 */
   position: number;
-  /** 道具参考图在 images 中的下标，未上传为 -1 */
-  prop: number;
+  /** 多道具:每个选中道具的 名字 + 图下标（idx=-1 表示该道具无图，仅文字提及） */
+  props: Array<{ name: string; idx: number }>;
   /** 旁白音频在 audios 中的下标，未上传为 -1 */
   narration: number;
+}
+
+/** 取场景/道具的 refs（优先 *_refs 快照,退化到老的单图字段）。buildSeedancePayload 复用,保证顺序一致。 */
+export function sceneRefsOf(g: Project["global"]): Array<{ name: string; image_url: string | null }> {
+  if (g.scene_refs && g.scene_refs.length) return g.scene_refs;
+  if (g.scene_image && g.scene_image.trim()) return [{ name: "场景", image_url: g.scene_image }];
+  return [];
+}
+export function propRefsOf(g: Project["global"]): Array<{ name: string; image_url: string | null }> {
+  if (g.prop_refs && g.prop_refs.length) return g.prop_refs;
+  if (g.prop_image_url && g.prop_image_url.trim()) return [{ name: "道具", image_url: g.prop_image_url }];
+  return [];
 }
 
 /**
@@ -87,9 +99,9 @@ export function resolveCharacterAudioRef(c: Character | undefined | null): strin
 export function buildAssetIndex(p: Project, characters: Character[]): AssetIndexMap {
   const map: AssetIndexMap = {
     characterImage: {},
-    scene: -1,
+    scenes: [],
     position: -1,
-    prop: -1,
+    props: [],
     narration: -1,
   };
   let imgIdx = 0;
@@ -101,17 +113,19 @@ export function buildAssetIndex(p: Project, characters: Character[]): AssetIndex
       map.characterImage[cid] = imgIdx++;
     }
   }
-  // 2. 场景图
-  if (p.global.scene_image && p.global.scene_image.trim()) {
-    map.scene = imgIdx++;
+  // 2. 多场景图（每个有图的场景各占一个「图片N」；无图场景 idx=-1 仅文字提及）
+  for (const r of sceneRefsOf(p.global)) {
+    const hasImg = !!(r.image_url && r.image_url.trim());
+    map.scenes.push({ name: r.name, idx: hasImg ? imgIdx++ : -1 });
   }
   // 3. 站位草图
   if (p.global.position_image_url && p.global.position_image_url.trim()) {
     map.position = imgIdx++;
   }
-  // 4. 道具参考图
-  if (p.global.prop_image_url && p.global.prop_image_url.trim()) {
-    map.prop = imgIdx++;
+  // 4. 多道具参考图
+  for (const r of propRefsOf(p.global)) {
+    const hasImg = !!(r.image_url && r.image_url.trim());
+    map.props.push({ name: r.name, idx: hasImg ? imgIdx++ : -1 });
   }
   // 5. 旁白音频
   if (p.global.narration_audio_url && p.global.narration_audio_url.trim()) {
@@ -179,14 +193,24 @@ export function buildPromptText(p: Project, characters: Character[]): string {
       subjectDefs.push(`${c.name}(${feature || "角色"})`);
     }
   }
-  if (idx.scene >= 0 && g.scene_image) {
-    subjectDefs.push(`以${imgRef(idx.scene)}为背景`);
+  // 多场景:每个场景按「名字 + 图」分别体现(有图→以图片N为「名」的场景;无图→仅以名字提及)
+  for (const sc of idx.scenes) {
+    if (sc.idx >= 0) {
+      subjectDefs.push(`以${imgRef(sc.idx)}为「${sc.name}」场景的背景`);
+    } else {
+      subjectDefs.push(`场景「${sc.name}」`);
+    }
   }
   if (idx.position >= 0 && g.position_image_url) {
     subjectDefs.push(`以${imgRef(idx.position)}为人物站位参考`);
   }
-  if (idx.prop >= 0 && g.prop_image_url) {
-    subjectDefs.push(`以${imgRef(idx.prop)}为道具参考,保持道具外观、材质、颜色一致`);
+  // 多道具:每个道具按「道具名 + 图」分别体现,要求保持外观/材质/颜色一致
+  for (const pr of idx.props) {
+    if (pr.idx >= 0) {
+      subjectDefs.push(`${imgRef(pr.idx)}为道具「${pr.name}」,保持其外观、材质、颜色一致`);
+    } else {
+      subjectDefs.push(`道具「${pr.name}」`);
+    }
   }
   if (subjectDefs.length) {
     lines.push(subjectDefs.join(",") + "。");
@@ -321,5 +345,35 @@ export function buildPromptText(p: Project, characters: Character[]): string {
 
   // v0.9.5: 整段 prompt 用单空格拼成一行,不再有 \n。
   // 防御性过滤空串(老分支可能 push 进空字符串)。
-  return lines.filter((s) => s.trim().length > 0).join(" ").trim();
+  const body = lines.filter((s) => s.trim().length > 0).join(" ").trim();
+  // 末尾追加「想象力约束」指令,强度由 global.constraint_strength(0–100,默认 70)控制:
+  // 越高,越严格地只呈现描述内容、越强地禁止模型自由发挥。
+  const strength = clampStrength100(g.constraint_strength, 70);
+  const SUFFIX = constraintSuffix(strength);
+  return body ? `${body} ${SUFFIX}` : SUFFIX;
+}
+
+function clampStrength100(n: unknown, def: number): number {
+  const v = typeof n === "number" && Number.isFinite(n) ? n : def;
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+/** 按 0–100 强度生成约束后缀:弱→只提一句;中→中文负向;强→中英双语强约束。 */
+function constraintSuffix(strength: number): string {
+  if (strength <= 0) return "";
+  if (strength < 34) {
+    return "请尽量遵循以上提示词的描述。";
+  }
+  if (strength < 67) {
+    return (
+      "请遵循以上提示词,主要呈现描述的内容,尽量不要添加未提及的明显元素,不要大幅改写剧情。"
+    );
+  }
+  return (
+    "严格按以上提示词生成,只呈现明确描述的内容;不要自行添加任何未提及的人物、物体、道具、场景、文字或背景元素," +
+    "不要发挥想象、不要补充或改写剧情、不要二次创作;画面元素、数量、外观、动作均以提示词为准。" +
+    "Strictly follow the prompt above. Show ONLY what is explicitly described. " +
+    "Do NOT add any unmentioned elements (no extra characters, objects, props, scenery, text, or background). " +
+    "Do NOT improvise, invent, or embellish the story. Keep every element, count, appearance, and action exactly as specified."
+  );
 }

@@ -1,5 +1,7 @@
 import { CopyIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { LayerChip } from "@/components/primitives/LayerChip";
+import { ZoomButton } from "@/components/primitives/ZoomableImage";
+import { isLoadableUrl } from "@/lib/format";
 import { useT, useTf } from "@/lib/i18n";
 import { filledShotCount } from "@/lib/validators";
 import type { Character, Project, Shot } from "@/types";
@@ -94,13 +96,42 @@ export function ShotView({
             value={shot.description ?? ""}
             onChange={(e) => setShot({ ...shot, description: e.target.value })}
           />
+          {shot.ref_image_url && isLoadableUrl(shot.ref_image_url) && (
+            <div style={{ marginTop: 10 }}>
+              <div className="dim-2 mono" style={{ fontSize: 11, marginBottom: 6 }}>
+                {tf("分镜参考图（分镜头脚本第 {n} 格）", { n: shotIndex + 1 })}
+              </div>
+              <div
+                style={{
+                  position: "relative", width: 160, aspectRatio: "4 / 3",
+                  border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden",
+                  background: "var(--surface-2)",
+                }}
+              >
+                <img
+                  src={shot.ref_image_url}
+                  alt={t("分镜参考图")}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+                <ZoomButton src={shot.ref_image_url} alt={t("分镜参考图")} />
+                <button
+                  className="btn btn-sm btn-ghost"
+                  title={t("移除参考图")}
+                  onClick={() => setShot({ ...shot, ref_image_url: null })}
+                  style={{ position: "absolute", top: 4, right: 4, padding: 2, minWidth: 22, background: "rgba(0,0,0,.5)", color: "#fff" }}
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            </div>
+          )}
         </SubCard>
 
         <SubCard
           anchor={`s-${shot.id}-cast`}
           num="00" title="本分镜出场角色"
-          tags={["req"]} required
-          help="从已加入本剧的角色中，选择会在这一分镜出场的角色。这一步决定了下方台词、内心独白可以指派给哪些角色。"
+          tags={["opt"]}
+          help="（可选）从已加入本剧的角色中，选择会在这一分镜出场的角色。选了之后，下方台词、内心独白才能指派给这些角色；不选也能直接生成。"
         >
           <FShotCast
             value={shot} set={setShot}
@@ -131,9 +162,9 @@ export function ShotView({
         <SubCard
           anchor={`s-${shot.id}-action`}
           num="13" title="角色动作"
-          tags={["req"]} required
+          tags={["opt"]}
           example="林夏从沙发上起身（起点）→ 走向窗边（过程）→ 推开窗户深呼吸（结束）"
-          help="拆成「起点 → 过程 → 结束」三段。注意保持骨骼运动的连贯性。"
+          help="（可选）拆成「起点 → 过程 → 结束」三段，注意保持骨骼运动的连贯性。不填也能生成。"
         >
           <FAction value={shot} set={setShot} />
         </SubCard>

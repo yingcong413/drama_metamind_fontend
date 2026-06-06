@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5174,
+    port: 5173,
     proxy: {
       "/api": {
         target: "http://localhost:8080",
@@ -33,6 +33,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         rewrite: (p) => p.replace(/^\/seegen-proxy/, ""),
+      },
+      // metamind.ltd —— AI 助手(gpt-5.4 文本 / gpt-image-2 出图),OpenAI 兼容网关
+      // 浏览器直连会被 CORS 拦,统一走代理;Authorization 由前端 api/metamind.ts 注入
+      "/metamind-proxy": {
+        target: "https://www.metamind.ltd",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/metamind-proxy/, ""),
       },
     },
   },

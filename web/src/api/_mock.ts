@@ -200,7 +200,7 @@ function persistProjectDetails() {
   saveJSON("project_details", PROJECT_DETAILS);
 }
 
-const blankProject = (id: string): Project => ({
+export const blankProject = (id: string): Project => ({
   id,
   name: id === "new" ? "未命名项目" : `项目 ${id}`,
   cover_url: null,
@@ -217,6 +217,7 @@ const blankProject = (id: string): Project => ({
     scenes: [],
     props: [],
     scene_image: null,
+    constraint_strength: 70,
     position_image_url: null,
     prop_image_url: null,
     style: [], characters: [], story: "",
@@ -351,7 +352,7 @@ export async function mockDeleteProject(id: string): Promise<void> {
   }
 }
 
-function simpleHueFromName(name: string): number {
+export function simpleHueFromName(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
   return Math.abs(hash) % 360;
@@ -730,6 +731,7 @@ function randTask(i: number): GenerationTask {
     type,
     platform,
     upstream_model: "mock-model",
+    upstream_task_id: null,
     channel_id: 8 + (i % 4),
     user,
     status,

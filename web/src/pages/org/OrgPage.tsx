@@ -112,6 +112,13 @@ export function OrgPage() {
       patchMember(id, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["org-members"] }),
   });
+  // 每月额度(硬限制):0=不限
+  const setQuota = useMutation({
+    mutationFn: ({ id, cents }: { id: string; cents: number }) =>
+      patchMember(id, { monthly_quota_cents: cents }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["org-members"] }),
+    onError: (e) => alert(tf("设置额度失败:{msg}", { msg: e instanceof Error ? e.message : String(e) })),
+  });
   const resetPwd = useMutation({
     mutationFn: (id: string) => resetMemberPassword(id),
     onSuccess: (r) =>
@@ -401,6 +408,20 @@ export function OrgPage() {
                       resetPwd.mutate(m.user_id);
                     }
                   }}
+                  onSetQuota={() => {
+                    const cur = ((m.monthly_quota_cents ?? 0) / 100).toString();
+                    const input = window.prompt(
+                      tf("给「{name}」设置本月额度(元，0=不限额):", { name: m.name }),
+                      cur,
+                    );
+                    if (input === null) return;
+                    const yuan = parseFloat(input);
+                    if (!Number.isFinite(yuan) || yuan < 0) {
+                      alert(t("请输入 ≥ 0 的数字"));
+                      return;
+                    }
+                    setQuota.mutate({ id: m.user_id, cents: Math.round(yuan * 100) });
+                  }}
                   onKick={() => {
                     if (confirm(tf("确认踢出「{name}」?该成员将变为个人账户,在本组织的数据不带走。", { name: m.name }))) {
                       kick.mutate(m.user_id);
@@ -574,6 +595,7 @@ function MemberRow({
   onReset,
   onKick,
   onTransfer,
+  onSetQuota,
 }: {
   member: OrgMember;
   isSelf: boolean;
@@ -581,6 +603,7 @@ function MemberRow({
   onReset: () => void;
   onKick: () => void;
   onTransfer: () => void;
+  onSetQuota: () => void;
 }) {
   const t = useT();
   return (
@@ -641,6 +664,17 @@ function MemberRow({
       <td style={{ padding: 12, textAlign: "right" }}>
         {!isSelf && member.role === "member" && (
           <div style={{ display: "inline-flex", gap: 4 }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onSetQuota}
+              title={member.monthly_quota_cents && member.monthly_quota_cents > 0
+                ? t("本月额度") + ": ¥" + (member.monthly_quota_cents / 100).toFixed(2)
+                : t("本月额度: 不限")}
+            >
+              {member.monthly_quota_cents && member.monthly_quota_cents > 0
+                ? "额度 ¥" + (member.monthly_quota_cents / 100).toFixed(0)
+                : t("额度")}
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={onToggleStatus}>
               {member.status === "active" ? t("禁用") : t("启用")}
             </button>

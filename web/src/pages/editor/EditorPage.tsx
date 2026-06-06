@@ -7,7 +7,9 @@ import { getProject, listProjects, updateProject } from "@/api/projects";
 import { listCharacters } from "@/api/characters";
 import { listScenes } from "@/api/scenes";
 import { listProps } from "@/api/props";
+import { getAccount } from "@/api/account";
 import { computeValidation } from "@/lib/validators";
+import { generateShots } from "@/lib/aiFill";
 import { getLastProjectId, setLastProjectId, clearLastProjectId } from "@/lib/lastProject";
 import { useT, useTf } from "@/lib/i18n";
 import type { GlobalLayer, OutputLayer, Project, Shot } from "@/types";
@@ -21,13 +23,14 @@ import { AiPanel } from "./AiPanel";
 import { FrameComposer } from "./FrameComposer";
 import { useGenModeStore, type GenMode } from "@/stores/genMode";
 
+type ActiveKey = "global" | `shot:${string}`;
+
+// 工作台左上角生成模式:常规(整套编辑器) / 首尾帧 / 智能多帧(参考即梦,补衔接镜头)。
 const MODE_OPTS: { id: GenMode; label: string }[] = [
-  { id: "regular", label: "常规模式" },
+  { id: "regular", label: "精细控制" },
   { id: "first_last", label: "首尾帧模式" },
   { id: "smart_multi", label: "智能多帧模式" },
 ];
-
-type ActiveKey = "global" | `shot:${string}`;
 
 const newShot = (): Shot => ({
   id: "s_" + Date.now().toString(36),
@@ -56,9 +59,6 @@ export function EditorPage() {
   const tf = useTf();
   const params = useParams<{ id: string }>();
   const urlId = params.id; // 路由 /editor 时为 undefined;/projects/:id/edit 时为具体 id
-  const genMode = useGenModeStore((s) => s.mode);
-  const setGenMode = useGenModeStore((s) => s.setMode);
-  const solo = genMode !== "regular";
 
   // 路径无 id(顶栏「工作台」直接进):跳到上次工作的项目;没有就跳回项目列表。
   // 用 useEffect 是因为 useNavigate 不能在渲染期间调,且这一跳只发生一次。
@@ -123,6 +123,13 @@ export function EditorPage() {
     staleTime: 0,
   });
 
+  // 账户余额:用于「余额不足无法使用」硬付费墙提醒
+  const accountQuery = useQuery({
+    queryKey: ["account"],
+    queryFn: getAccount,
+  });
+  const lowBalance = !!accountQuery.data && accountQuery.data.balance_cents <= 0;
+
   const [project, setProject] = useState<Project | null>(null);
   // 自动保存：basline = 最近一次「落库/加载」时的 project 快照（JSON）。
   // 用「发送出去的快照」当基线，既能判断有无未保存改动，又能避免服务端回显 updated_at 触发自存死循环。
@@ -143,6 +150,11 @@ export function EditorPage() {
     savedSnapshotRef.current = JSON.stringify(data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectQuery.data, project?.id]);
+
+  // 生成模式(zustand 持久化):非「常规」即 solo —— 隐藏导航 / AI 面板,主区独占,渲染 FrameComposer。
+  const genMode = useGenModeStore((s) => s.mode);
+  const setGenMode = useGenModeStore((s) => s.setMode);
+  const solo = genMode !== "regular";
 
   const [activeKey, setActiveKey] = useState<ActiveKey>("global");
   const [activeShot, setActiveShot] = useState<string>("");
@@ -342,22 +354,15 @@ export function EditorPage() {
     selectShot(next.id);
   };
 
-  // 根据「故事内容」自动拆解出多个分镜(本地拆句,不发请求)。
-  // 真实后端接入后可替换为调用大模型返回的分镜结构。
-  const autoGenerateShots = () => {
+  // 根据「故事内容」调用文字模型,自动拆解并填充多个分镜的各项内容
+  // (分镜名 / 画面描述 / 景别 / 起承转动作 / 台词),而不是只把整段塞进描述。
+  const autoGenerateShots = async () => {
     if (!project) return;
     const story = (project.global.story || "").trim();
     if (!story) {
       alert(t("请先填写「故事内容」，再自动生成分镜头。"));
       return;
     }
-    const segments = story
-      .split(/[。.!！?？;；\n]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (segments.length === 0) return;
-    // 至少 3 段、最多 8 段:段落不足时按句拆;过多时只取前 8 段
-    const picked = segments.slice(0, 8);
     if (
       project.shots.length > 0 &&
       !confirm(
@@ -366,17 +371,18 @@ export function EditorPage() {
     ) {
       return;
     }
-    const base = Date.now().toString(36);
-    const shots: Shot[] = picked.map((seg, i) => ({
-      ...newShot(),
-      id: `s_${base}_${i}`,
-      name: tf("分镜 {n}", { n: i + 1 }),
-      order: i,
-      description: seg,
-      action: { start: seg, mid: "", end: "" },
-    }));
-    setProject({ ...project, shots });
-    selectShot(shots[0].id);
+    // 分镜数量:按故事句子数估,clamp 3–8(模型再据此拆)
+    const segs = story.split(/[。.!！?？;；\n]+/).map((s) => s.trim()).filter(Boolean);
+    const count = Math.max(3, Math.min(8, segs.length || 4));
+    try {
+      const shots = await generateShots(story, count);
+      if (shots.length) {
+        setProject((prev) => (prev ? { ...prev, shots, shot_count: shots.length } : prev));
+        selectShot(shots[0].id);
+      }
+    } catch (e) {
+      alert(t("自动生成分镜失败：") + (e instanceof Error ? e.message : String(e)));
+    }
   };
   const duplicateShot = (sid: string) => {
     if (!project) return;
@@ -462,6 +468,20 @@ export function EditorPage() {
                 ⚠ {tf("还差 {n} 项必填", { n: validation.missing.length })}
               </button>
             )}
+            {lowBalance && (
+              <button
+                className="btn btn-sm"
+                style={{
+                  background: "rgba(220,38,38,.12)",
+                  border: "1px solid rgba(220,38,38,.4)",
+                  color: "oklch(70% .18 25)",
+                }}
+                title={t("余额不足，请充值后再生成")}
+                onClick={() => navigate("/account")}
+              >
+                ⚠ {t("余额不足")}
+              </button>
+            )}
             <button className="btn btn-sm" onClick={() => saveProject()} disabled={savingProject}>
               <SaveIcon /> {savingProject ? t("保存中…") : t("保存")}
             </button>
@@ -469,11 +489,17 @@ export function EditorPage() {
               className="btn-primary btn btn-sm"
               disabled={openingModal === "generate"}
               title={
-                validation.canGenerate
+                lowBalance
+                  ? t("余额不足，请充值后再生成")
+                  : validation.canGenerate
                   ? t("生成视频")
                   : `${t("还差必填")}: ${validation.missing.map((m) => t(m)).join(" / ")}`
               }
               onClick={() => {
+                if (lowBalance) {
+                  navigate("/account");
+                  return;
+                }
                 if (!validation.canGenerate) {
                   setShowMissing(true);
                   return;
@@ -481,7 +507,7 @@ export function EditorPage() {
                 void ensureFreshAndOpen("generate");
               }}
             >
-              <SparkleIcon /> {openingModal === "generate" ? t("准备中…") : t("生成视频")}
+              <SparkleIcon /> {lowBalance ? t("余额不足，去充值") : openingModal === "generate" ? t("准备中…") : t("生成视频")}
             </button>
           </>
         )}
@@ -493,21 +519,21 @@ export function EditorPage() {
         style={!solo && aiWidth ? ({ ["--ai-w"]: aiWidth + "px" } as CSSProperties) : undefined}
       >
         {!solo && (
-          <EditorNav
-            project={project}
-            activeKey={activeKey}
-            activeShot={activeShot}
-            scrollAnchor={scrollAnchor}
-            globalCollapsed={globalCollapsed}
-            shotsCollapsed={shotsCollapsed}
-            toggleGlobal={() => setGlobalCollapsed((c) => !c)}
-            toggleShots={() => setShotsCollapsed((c) => !c)}
-            selectGlobal={selectGlobal}
-            selectShot={selectShot}
-            duplicateShot={duplicateShot}
-            deleteShot={deleteShot}
-            addShot={addShot}
-          />
+        <EditorNav
+          project={project}
+          activeKey={activeKey}
+          activeShot={activeShot}
+          scrollAnchor={scrollAnchor}
+          globalCollapsed={globalCollapsed}
+          shotsCollapsed={shotsCollapsed}
+          toggleGlobal={() => setGlobalCollapsed((c) => !c)}
+          toggleShots={() => setShotsCollapsed((c) => !c)}
+          selectGlobal={selectGlobal}
+          selectShot={selectShot}
+          duplicateShot={duplicateShot}
+          deleteShot={deleteShot}
+          addShot={addShot}
+        />
         )}
 
         <main className="main" ref={mainRef}>
@@ -571,12 +597,29 @@ export function EditorPage() {
             </div>
 
             <AiPanel
+              project={project}
+              setProject={setProject}
               characters={charsQuery.data}
-              scenes={scenesQuery.data ?? []}
-              props={propsQuery.data ?? []}
-              onImportStoryboard={(imageUrl) => {
-                updateGlobal({ ...project.global, storyboard_image_url: imageUrl });
+              onCharactersChanged={() => qc.refetchQueries({ queryKey: ["characters"] })}
+              onImportStoryboard={(url, opts) => {
+                // 整图写入字段 07
+                updateGlobal({ ...project.global, storyboard_image_url: url });
                 selectGlobal("g-storyboard");
+                // 整图 + 自动建分镜:按剧情让模型拆成 count 个分镜,并把第 k 格图严格配给第 k 个分镜
+                if (opts?.story && opts?.count) {
+                  const cells = opts.cells ?? [];
+                  void generateShots(opts.story, opts.count)
+                    .then((shots) => {
+                      if (!shots.length) return;
+                      const withImg = shots.map((s, i) =>
+                        cells[i] ? { ...s, ref_image_url: cells[i] } : s,
+                      );
+                      setProject((prev) =>
+                        prev ? { ...prev, shots: withImg, shot_count: withImg.length } : prev,
+                      );
+                    })
+                    .catch((e) => console.warn("[storyboard] 自动建分镜失败:", e));
+                }
               }}
             />
           </>

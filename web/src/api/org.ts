@@ -66,7 +66,7 @@ export function createMember(input: CreateMemberRequest): Promise<CreateMemberRe
   return post<CreateMemberResponse>("/org/members", input);
 }
 
-export function patchMember(userId: string, patch: { name?: string; status?: "active" | "disabled" }): Promise<OrgMember> {
+export function patchMember(userId: string, patch: { name?: string; status?: "active" | "disabled"; monthly_quota_cents?: number }): Promise<OrgMember> {
   if (USE_MOCK) return mockPatchMember(userId, patch);
   return httpPatch<OrgMember>(`/org/members/${userId}`, patch);
 }
@@ -200,7 +200,7 @@ async function mockCreateMember(input: CreateMemberRequest): Promise<CreateMembe
   return { member: m, init_password: initPwd };
 }
 
-async function mockPatchMember(userId: string, patch: { name?: string; status?: "active" | "disabled" }): Promise<OrgMember> {
+async function mockPatchMember(userId: string, patch: { name?: string; status?: "active" | "disabled"; monthly_quota_cents?: number }): Promise<OrgMember> {
   await delay(140);
   const store = loadMembersStore();
   const idx = store.members.findIndex((m) => m.user_id === userId);

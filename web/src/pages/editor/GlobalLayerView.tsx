@@ -11,6 +11,7 @@ import { FStyle } from "./fields/FStyle";
 import { FCharacters } from "./fields/FCharacters";
 import { FStory } from "./fields/FStory";
 import { FImageQuality } from "./fields/FImageQuality";
+import { FConstraint } from "./fields/FConstraint";
 import { FAmbientSfx } from "./fields/FAmbientSfx";
 import { FSubtitle } from "./fields/FSubtitle";
 import { FToggle } from "./fields/FToggle";
@@ -47,6 +48,7 @@ export function GlobalLayerView({ global, setGlobal, output, setOutput, characte
       case "characters": return <FCharacters {...g} characters={characters} />;
       case "story":      return <FStory {...g} onAutoGenShots={onAutoGenShots} />;
       case "imageQuality": return <FImageQuality {...g} />;
+      case "constraint": return <FConstraint {...g} />;
       case "ambientSfx": return <FAmbientSfx {...o} />;
       case "subtitle":   return <FSubtitle {...o} />;
       case "generateAudio": return <FToggle {...o} k="generate_audio" on="开启" off="关闭" defaultLabel="on" />;

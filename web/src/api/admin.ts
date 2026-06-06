@@ -2,7 +2,8 @@
 //
 // 本期只暴露 admin 手动充值相关 3 个端点;其它管理动作(调席位/解散 org 等)推迟。
 
-import { USE_REAL_AUTH, get, post } from "./client";
+import { USE_REAL_AUTH, get, patch, post } from "./client";
+import type { Project } from "@/types";
 
 const USE_MOCK_ADMIN = !USE_REAL_AUTH;
 
@@ -57,11 +58,130 @@ export interface AdminListResponse<T> {
   total: number;
 }
 
+// 所有账户总览(org = 计费账户)
+export interface AdminOrgItem {
+  id: string;
+  name: string;
+  account_type: "personal" | "enterprise";
+  status: "active" | "dissolved";
+  owner_name: string;
+  owner_phone_masked: string;
+  member_count: number;
+  seat_limit: number;
+  balance_cents: number;
+  lifetime_recharged_cents: number;
+  lifetime_spent_cents: number;
+  created_at: string;
+}
+
+export interface AdminOrgsQuery {
+  account_type?: "all" | "enterprise" | "personal";
+  status?: "all" | "active" | "dissolved";
+  q?: string;
+  page?: number;
+  page_size?: number;
+}
+
 // ─────────── 真接口 ───────────
 
 export function searchOrgs(q: string): Promise<{ list: OrgSearchItem[] }> {
   if (USE_MOCK_ADMIN) return Promise.resolve({ list: [] });
   return get<{ list: OrgSearchItem[] }>("/admin/orgs/search", { q });
+}
+
+/** 平台管理员:所有账户总览(可按类型/状态过滤) */
+export function listAdminOrgs(
+  query: AdminOrgsQuery = {},
+): Promise<AdminListResponse<AdminOrgItem>> {
+  if (USE_MOCK_ADMIN) {
+    return Promise.resolve({ list: [], page: 1, page_size: 50, total: 0 });
+  }
+  return get<AdminListResponse<AdminOrgItem>>("/admin/orgs", {
+    account_type: query.account_type ?? "all",
+    status: query.status ?? "all",
+    q: query.q ?? "",
+    page: query.page ?? 1,
+    page_size: query.page_size ?? 50,
+  });
+}
+
+// 全平台项目(管理员复现用)
+export interface AdminProjectItem {
+  id: string;
+  name: string;
+  cover_url: string | null;
+  hue: number;
+  status: string;
+  shot_count: number;
+  duration_seconds: number;
+  updated_at: string;
+  org_id: string;
+  org_name: string;
+  owner_name: string;
+}
+
+/** 平台管理员:全平台项目列表(可模糊名 + 分页) */
+export function listAdminProjects(
+  query: { q?: string; page?: number; page_size?: number } = {},
+): Promise<AdminListResponse<AdminProjectItem>> {
+  if (USE_MOCK_ADMIN) {
+    return Promise.resolve({ list: [], page: 1, page_size: 50, total: 0 });
+  }
+  return get<AdminListResponse<AdminProjectItem>>("/admin/projects", {
+    q: query.q ?? "",
+    page: query.page ?? 1,
+    page_size: query.page_size ?? 50,
+  });
+}
+
+/** 平台管理员:把某用户项目克隆进自己 org(复现),返回新建项目 */
+export function importAdminProject(id: string): Promise<Project> {
+  if (USE_MOCK_ADMIN) {
+    return Promise.reject(new Error("mock 模式不支持导入项目;设 USE_REAL_AUTH=true"));
+  }
+  return post<Project>(`/admin/projects/${id}/import`, {});
+}
+
+// 全平台用户(管理员管理所有账号 + 设验证账号 / 额度)
+export interface AdminUserItem {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  role: "owner" | "member";
+  status: "active" | "disabled";
+  org_id: string | null;
+  org_name: string;
+  account_type: "personal" | "enterprise";
+  is_platform_admin: boolean;
+  is_verification_account: boolean;
+  monthly_quota_cents: number;
+  month_spent_cents: number;
+}
+
+/** 平台管理员:全平台用户列表 */
+export function listAdminUsers(
+  query: { q?: string; page?: number; page_size?: number } = {},
+): Promise<AdminListResponse<AdminUserItem>> {
+  if (USE_MOCK_ADMIN) {
+    return Promise.resolve({ list: [], page: 1, page_size: 50, total: 0 });
+  }
+  return get<AdminListResponse<AdminUserItem>>("/admin/users", {
+    q: query.q ?? "",
+    page: query.page ?? 1,
+    page_size: query.page_size ?? 50,
+  });
+}
+
+/** 平台管理员:设/取消验证账号、改额度 */
+export function patchAdminUser(
+  id: string,
+  body: { is_verification_account?: boolean; monthly_quota_cents?: number },
+): Promise<{ id: string; name: string; is_verification_account: boolean; monthly_quota_cents: number }> {
+  if (USE_MOCK_ADMIN) {
+    return Promise.reject(new Error("mock 模式不支持;设 USE_REAL_AUTH=true"));
+  }
+  return patch(`/admin/users/${id}`, body);
 }
 
 export function createAdminRecharge(

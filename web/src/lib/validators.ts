@@ -66,14 +66,9 @@ export function computeValidation(p: Project): ValidationResult {
   if (!isFilled(p.global, "characters")) missing.push("角色调用");
   if (!isFilled(p.global, "story")) missing.push("故事内容");
 
-  // 分镜可选（v0.9.5）：分镜「角色动作」缺失降级为软提示，不再阻断生成。
+  // 分镜「出场角色 / 角色动作」均为可选(用户诉求):既不阻断生成,也不再做软提示。
   // 没有分镜也允许生成（按全局设定整体出片）。
   const warnings: ShotWarning[] = [];
-  p.shots.forEach((s, i) => {
-    if (!isShotFilled(s, "action")) {
-      warnings.push({ idx: String(i + 1).padStart(2, "0"), name: s.name ?? "" });
-    }
-  });
 
   return { missing, warnings, canGenerate: missing.length === 0 };
 }

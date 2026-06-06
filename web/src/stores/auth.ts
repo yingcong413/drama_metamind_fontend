@@ -56,3 +56,8 @@ export function useCanManageOrg(): boolean {
 export function useIsPlatformAdmin(): boolean {
   return useAuthStore((s) => s.user?.is_platform_admin === true);
 }
+
+/** 是否验证账号:仅其能看到生成视频的提示词 / JSON */
+export function useIsVerificationAccount(): boolean {
+  return useAuthStore((s) => s.user?.is_verification_account === true);
+}

@@ -12,11 +12,15 @@ interface Props {
   props: Prop[];
 }
 
-// 写入 props id 数组（多选的真实来源），同时把数组首项的参考图派生进 prop_image_url
-// —— prompt 流水线仍只读单张 prop_image_url，保持不变。
+// 写入 props id 数组（多选的真实来源），首项派生进 prop_image_url（向后兼容），
+// 并写入每个选中道具的「名字 + 图」快照 prop_refs，供 prompt 按「道具名 + 图」分别体现多道具。
 function applySelection(value: GlobalLayer, ids: string[], props: Prop[]): GlobalLayer {
   const primary = ids.length ? props.find((p) => p.id === ids[0]) : null;
-  return { ...value, props: ids, prop_image_url: primary?.image_url ?? null };
+  const prop_refs = ids
+    .map((id) => props.find((p) => p.id === id))
+    .filter((p): p is Prop => !!p)
+    .map((p) => ({ name: p.name, image_url: p.image_url ?? null }));
+  return { ...value, props: ids, prop_image_url: primary?.image_url ?? null, prop_refs };
 }
 
 export function FProp({ value, set, props }: Props) {

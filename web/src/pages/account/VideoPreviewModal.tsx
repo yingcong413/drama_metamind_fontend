@@ -16,7 +16,7 @@ export function VideoPreviewModal({ task, onClose }: Props) {
   const navigate = useNavigate();
   const videoUrl = task.output_video_url;
 
-  // 给模型的所有提示词:优先自然语言文本,退化到结构化 JSON,再退化到占位
+  // R5:给 Seedance 的总体提示词 —— 优先自然语言文本,退化到结构化 JSON,再退化到占位
   const promptText =
     task.prompt?.natural_text?.trim() ||
     (task.prompt?.structured_json
@@ -37,6 +37,8 @@ export function VideoPreviewModal({ task, onClose }: Props) {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  // R5:重新生成视频 —— 回到工作台。该项目已保存生成此视频的全部内容(自动保存),
+  // 进入编辑器即默认带出所有字段,客户在此基础上修改后再次生成。
   const handleRegenerate = () => {
     if (!task.project_id) {
       alert(t("该任务未关联项目，无法重新生成"));
@@ -46,16 +48,25 @@ export function VideoPreviewModal({ task, onClose }: Props) {
     navigate(`/projects/${task.project_id}/edit`);
   };
 
-  const handleDownload = () => {
+  const downloadVideo = () => {
     if (!videoUrl) return;
     const a = document.createElement("a");
     a.href = videoUrl;
-    a.download = "";
+    a.download = `${task.id}.mp4`;
     a.target = "_blank";
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
+  };
+
+  const copyLink = async () => {
+    if (!videoUrl) return;
+    try {
+      await navigator.clipboard.writeText(videoUrl);
+    } catch {
+      /* 剪贴板不可用时静默忽略 */
+    }
   };
 
   return (
@@ -161,10 +172,18 @@ export function VideoPreviewModal({ task, onClose }: Props) {
                 <button
                   className="btn"
                   style={{ justifyContent: "flex-start", padding: "10px 14px" }}
-                  onClick={handleDownload}
+                  onClick={downloadVideo}
                   disabled={!videoUrl}
                 >
-                  <UploadIcon style={{ transform: "rotate(180deg)" }} /> {t("下载原视频")}
+                  <UploadIcon style={{ transform: "rotate(180deg)" }} /> {t("下载视频 · MP4")}
+                </button>
+                <button
+                  className="btn"
+                  style={{ justifyContent: "flex-start", padding: "10px 14px" }}
+                  onClick={copyLink}
+                  disabled={!videoUrl}
+                >
+                  <CopyIcon /> {t("复制分享链接")}
                 </button>
               </div>
             </div>
@@ -180,7 +199,7 @@ export function VideoPreviewModal({ task, onClose }: Props) {
                   className="dim-2 mono"
                   style={{ fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase" }}
                 >
-                  {t("提示词")}
+                  {t("总提示词")}
                 </span>
                 <button className="btn-ghost btn-sm" onClick={copyPrompt} style={{ padding: "2px 8px" }}>
                   <CopyIcon /> {copied ? t("已复制") : t("复制")}

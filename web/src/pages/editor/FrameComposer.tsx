@@ -144,7 +144,7 @@ export function FrameComposer({ mode, value, set, onGenerate }: Props) {
 
             <textarea
               className="fc-prompt"
-              placeholder={mode === "smart_multi" && !hasFrames ? t("请添加智能多帧的镜头") : placeholder}
+              placeholder={mode === "smart_multi" && !hasFrames ? t("可添加多张图片，图片顺序将成为视频画面的顺序") : placeholder}
               value={prompt}
               onChange={(e) => set({ ...value, frame_prompt: e.target.value })}
             />

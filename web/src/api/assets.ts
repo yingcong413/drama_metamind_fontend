@@ -19,6 +19,7 @@
 // 角色 → 资产 列表由这个缓存提供 —— 因为我们没有自建后端来 join character 与
 // provider 的 group。computeMockAssetBundle 也基于这个缓存算 character 卡片徽标。
 
+import { USE_REAL_AUTH } from "./client";
 import { uploadFileToTos } from "./tosUpload";
 import {
   getCurrentProvider,
@@ -26,8 +27,84 @@ import {
   type AssetGetResp,
 } from "./assetProvider";
 import { mockGetCharacter, mockSetCharacterArkGroup } from "./_mock";
+import { getCharacter, updateCharacter } from "./characters";
 import { loadJSON, saveJSON } from "./_mockStorage";
 import type { Asset, AssetKind, AssetRole, Character } from "@/types";
+
+// 角色库走真后端时(USE_REAL_AUTH),素材不再走 SeeGen 建组,
+// 直接把公开 TOS URL 持久化到后端角色的 asset_bundle / ref_image_url。
+const USE_BACKEND_CHARACTERS = USE_REAL_AUTH;
+
+/**
+ * 真后端模式:把一份素材(已在公开 TOS 上的 URL)写进后端角色记录,并返回一个
+ * 立即 active 的 Asset。把主图同步进 asset_bundle.primary_* + ref_image_url,
+ * 这样 Seedance 引用(resolveCharacterImageRef)与角色卡渲染都能拿到。
+ */
+async function persistAssetToBackendCharacter(input: {
+  url: string;
+  character_id: string;
+  kind: AssetKind;
+  role_in_bundle?: AssetRole;
+  filename?: string;
+}): Promise<Asset> {
+  let char: Character | null = null;
+  try {
+    char = await getCharacter(input.character_id);
+  } catch {
+    char = null;
+  }
+  const bundle: Character["asset_bundle"] = char?.asset_bundle ?? {
+    counts: { image: 0, video: 0, audio: 0 },
+    primary_image_url: null, primary_video_url: null, primary_audio_url: null,
+    primary_image_ark_asset_id: null, primary_video_ark_asset_id: null, primary_audio_ark_asset_id: null,
+    processing_count: 0, failed_count: 0,
+  };
+  const isPrimary = (input.role_in_bundle ?? "other") === "primary";
+  const nextBundle: Character["asset_bundle"] = {
+    ...bundle,
+    counts: { ...bundle.counts, [input.kind]: (bundle.counts[input.kind] ?? 0) + 1 },
+  };
+  const patch: Partial<Character> = {};
+  if (isPrimary || (input.kind === "image" && !bundle.primary_image_url)) {
+    if (input.kind === "image") {
+      nextBundle.primary_image_url = input.url;
+      patch.ref_image_url = input.url;
+      patch.ref_images = [...(char?.ref_images ?? []), input.url];
+    } else if (input.kind === "video") {
+      nextBundle.primary_video_url = input.url;
+    } else if (input.kind === "audio") {
+      nextBundle.primary_audio_url = input.url;
+      patch.voice_sample_url = input.url;
+    }
+  }
+  patch.asset_bundle = nextBundle;
+  try {
+    await updateCharacter(input.character_id, patch);
+  } catch {
+    /* 角色可能尚未入库(极少数时序),失败不阻断 */
+  }
+  const now = new Date().toISOString();
+  const id = "a_" + Date.now().toString(36);
+  return {
+    id,
+    org_id: char?.org_id ?? "",
+    character_id: input.character_id,
+    kind: input.kind,
+    url: input.url,
+    thumbnail_url: null,
+    role_in_bundle: input.role_in_bundle ?? "other",
+    original_filename: input.filename ?? id,
+    size_bytes: 0,
+    ark_asset_id: null,
+    status: "active",
+    processing_error: null,
+    width: null, height: null, duration_seconds: null, fps: null,
+    mime: input.kind === "image" ? "image/png" : input.kind === "audio" ? "audio/mpeg" : "application/octet-stream",
+    uploaded_by: "",
+    created_at: now,
+    updated_at: now,
+  };
+}
 
 // ─────────── 入参 ───────────
 
@@ -57,8 +134,12 @@ function persistAssets() {
 // ─────────── 辅助: provider Asset → 本地 Asset ───────────
 
 function applyServerAsset(local: Asset, server: AssetGetResp): Asset {
-  const url = server.url ?? local.url ?? null;
-  const thumb = server.thumbnail_url ?? local.thumbnail_url ?? null;
+  // 关键:始终保留我们自己上传的【公开 TOS URL】(local.url),
+  // 不要用火山 GetAsset 返回的 server.url —— 那是火山私有桶的【12 小时过期签名 URL】
+  // (ark-media-asset.tos-cn-beijing...?X-Tos-Expires=43200&X-Tos-Security-Token=...),
+  // 用它覆盖会导致素材过 12h 后 403「无访问权限」。
+  const url = local.url ?? server.url ?? null;
+  const thumb = local.thumbnail_url ?? server.thumbnail_url ?? null;
   const err = server.status === "failed" ? server.error ?? null : null;
   return {
     ...local,
@@ -120,6 +201,21 @@ async function ensureRealAssetGroup(character_id: string): Promise<string> {
  * 返回的 Asset 通常处于 status=processing,前端用 useAssetPolling 监听。
  */
 export async function uploadAsset(input: UploadAssetInput): Promise<Asset> {
+  // 真后端模式:传 TOS → 直接写进后端角色,不走 SeeGen 建组。
+  if (USE_BACKEND_CHARACTERS) {
+    const tos = await uploadFileToTos(input.file);
+    const asset = await persistAssetToBackendCharacter({
+      url: tos.url,
+      character_id: input.character_id,
+      kind: input.kind,
+      role_in_bundle: input.role_in_bundle,
+      filename: input.file.name,
+    });
+    assetCache.set(asset.id, asset);
+    persistAssets();
+    return asset;
+  }
+
   const provider = getCurrentProvider();
 
   // 1) 先把文件传到 TOS,拿公网 URL(两个 provider 都接 TOS URL)
@@ -157,7 +253,8 @@ export async function uploadAsset(input: UploadAssetInput): Promise<Asset> {
     org_id: "org_mock",
     character_id: input.character_id,
     kind: input.kind,
-    url: created.url ?? tosResult.url,
+    // 永远用我们自己上传的公开 TOS URL,不用上游(火山)返回的过期签名 URL
+    url: tosResult.url,
     thumbnail_url: null,
     role_in_bundle: input.role_in_bundle ?? "other",
     original_filename: input.file.name,
@@ -180,8 +277,93 @@ export async function uploadAsset(input: UploadAssetInput): Promise<Asset> {
   return baseAsset;
 }
 
+/**
+ * 用「已在公网 TOS 上的 URL」直接注册成角色素材,不再重新上传/下载文件。
+ * 适用场景:AI 生图已经把图传到我们自己的公开 TOS(uploadGlobalImage),
+ * 加入角色库时直接拿那个 URL 注册成主图 —— 避免浏览器 fetch(TOS) 触发 CORS。
+ */
+export async function registerAssetUrl(input: {
+  url: string;
+  character_id: string;
+  kind: AssetKind;
+  role_in_bundle?: AssetRole;
+  filename?: string;
+}): Promise<Asset> {
+  // 真后端模式:直接把 TOS URL 写进后端角色,不走 SeeGen。
+  if (USE_BACKEND_CHARACTERS) {
+    const asset = await persistAssetToBackendCharacter(input);
+    assetCache.set(asset.id, asset);
+    persistAssets();
+    return asset;
+  }
+
+  const provider = getCurrentProvider();
+  const groupId = await ensureRealAssetGroup(input.character_id);
+
+  const stem = (input.filename ?? `asset_${Date.now()}`).replace(/\.[^.]+$/, "");
+  const safeName =
+    stem.replace(/[^A-Za-z0-9_一-龥-]/g, "_").slice(0, 60) || `asset_${Date.now()}`;
+
+  const created = await provider.createAsset({
+    group_id: groupId,
+    url: input.url,
+    name: safeName,
+    kind: input.kind,
+  });
+  if (!created.id) {
+    throw new Error(
+      `${provider.name} CreateAsset 返回中找不到 id: ${JSON.stringify(created)}`,
+    );
+  }
+
+  const now = new Date().toISOString();
+  const id = created.id;
+  const baseAsset: Asset = {
+    id,
+    org_id: "org_mock",
+    character_id: input.character_id,
+    kind: input.kind,
+    // 永远用我们自己的公开 TOS URL
+    url: input.url,
+    thumbnail_url: null,
+    role_in_bundle: input.role_in_bundle ?? "other",
+    original_filename: input.filename ?? safeName,
+    size_bytes: 0,
+    ark_asset_id: id,
+    status: created.status,
+    processing_error: created.status === "failed" ? "上游返回失败" : null,
+    width: null,
+    height: null,
+    duration_seconds: null,
+    fps: null,
+    mime: input.kind === "image" ? "image/png" : input.kind === "audio" ? "audio/mpeg" : "application/octet-stream",
+    uploaded_by: "u_mock",
+    created_at: now,
+    updated_at: now,
+  };
+
+  assetCache.set(id, baseAsset);
+  persistAssets();
+  return baseAsset;
+}
+
 /** 拉一次当前 provider 的 GetAsset,顺手刷新本地缓存 */
 export async function getAsset(id: string): Promise<Asset> {
+  // 真后端模式:素材不走 SeeGen,创建即 active;直接回缓存,不轮询上游。
+  if (USE_BACKEND_CHARACTERS) {
+    const local = assetCache.get(id);
+    if (local) return local;
+    const now = new Date().toISOString();
+    const stub: Asset = {
+      id, org_id: "", character_id: "", kind: "image", url: null, thumbnail_url: null,
+      role_in_bundle: "other", original_filename: id, size_bytes: 0, ark_asset_id: null,
+      status: "active", processing_error: null, width: null, height: null,
+      duration_seconds: null, fps: null, mime: "application/octet-stream",
+      uploaded_by: "", created_at: now, updated_at: now,
+    };
+    return stub;
+  }
+
   const provider = getCurrentProvider();
   // 优先从缓存取静态字段(filename / character_id / role 等)
   const local = assetCache.get(id);

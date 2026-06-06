@@ -1,86 +1,77 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { ZoomableImage } from "@/components/primitives/ZoomableImage";
 import { useT, useTf } from "@/lib/i18n";
-import type { Character, Prop, Scene } from "@/types";
+import type { Character, Project } from "@/types";
+import { b64ToFile, chatComplete, generateImage, isMetamindConfigured, type AiUsage, type ChatMessage } from "@/api/metamind";
+import { generateAndFill } from "@/lib/aiFill";
+import { uploadGlobalImage } from "@/lib/uploadGlobalImage";
+import { createCharacter } from "@/api/characters";
+import { registerAssetUrl } from "@/api/assets";
+import { createScene } from "@/api/scenes";
+import { createProp } from "@/api/props";
+import { createTask, patchTask } from "@/api/tasks";
+import { avatarHue } from "@/lib/avatarHue";
+import { cropGridToUrls, gridLayout } from "@/lib/cropGrid";
+import { useIsOwner } from "@/stores/auth";
+import { useQueryClient } from "@tanstack/react-query";
+
+interface AiPanelProps {
+  project: Project;
+  setProject: (p: Project) => void;
+  characters: Character[];
+  onCharactersChanged: () => void;
+  /**
+   * 把分镜头脚本宫格图导入「字段 07 · 分镜头脚本」(global.storyboard_image_url)。
+   * 传了 opts.story + opts.count 时,额外按故事自动在分镜层建 count 个分镜(整图 + 自动建分镜);
+   * opts.cells 为按格裁切好的每格图 URL(顺序 = 镜号),用于把第 k 格严格配给第 k 个分镜。
+   */
+  onImportStoryboard?: (
+    imageUrl: string,
+    opts?: { story?: string; count?: number; cells?: string[] },
+  ) => void;
+}
 
 type FlowKind = "image" | "text";
 type ModelKind = FlowKind;
-type FlowId = "character" | "scene" | "prop" | "story";
+type FlowId = "character" | "scene" | "prop" | "story" | "storyboard";
+
+// 分镜头脚本「宫格数」选项(秦总需求 R6:6/9/12/15 宫格)
+const GRID_LABELS: Record<string, number> = {
+  "六宫格": 6,
+  "九宫格": 9,
+  "十二宫格": 12,
+  "十五宫格": 15,
+};
+
+// 自由文本里识别「N 宫格分镜头」意图(秦总案例:一段剧情 + “帮我生成一张九宫格的分镜头”)。
+// 命中则按宫格数把整段剧情画成分镜头脚本,并支持导入「字段 07」。
+function detectStoryboardIntent(text: string): { hit: boolean; grid: number } {
+  const hit = /宫格|分镜头|分镜脚本|story\s*board|storyboard/i.test(text);
+  let grid = 9;
+  const ar = text.match(/(\d{1,2})\s*宫格/);
+  const cn = text.match(/([两二三四五六七八九]|十[一二三四五六七八九]?|十)\s*宫格/);
+  const CN_NUM: Record<string, number> = {
+    两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9,
+    十: 10, 十一: 11, 十二: 12, 十三: 13, 十四: 14, 十五: 15, 十六: 16,
+  };
+  if (ar) grid = parseInt(ar[1], 10);
+  else if (cn) grid = CN_NUM[cn[1]] ?? 9;
+  return { hit, grid };
+}
+
+// 把一段剧情文本包装成「N 宫格分镜头脚本」出图提示词(秦总案例的处理方式)。
+// 明确给出 行×列 网格,方便后续严格按格裁切、逐格配给对应分镜。
+function buildStoryboardPromptFromText(story: string, n: number): string {
+  const { cols, rows } = gridLayout(n);
+  return (
+    `把下面这段剧情画成一张 ${n} 宫格的分镜头脚本(storyboard 故事板),` +
+    `严格排成 ${rows} 行 × ${cols} 列的等大网格(每格大小一致、对齐规整、格子间留细白边),` +
+    `按从左到右、从上到下的顺序,每一格画一个连续的电影镜头并在左上角标注镜号(①②③…),` +
+    `分镜草图风格,镜头之间动作连贯、可直接用于拍摄参考。` +
+    `画面只画剧情描述的内容,不要添加任何未提及的元素。剧情:${story}`
+  );
+}
 type Ans = Record<string, string | null>;
-
-interface AiPanelProps {
-  characters: Character[];
-  scenes: Scene[];
-  props: Prop[];
-  onImportStoryboard: (script: string) => void;
-}
-
-// 宫格数量 → 分镜格数
-const GRID_OPTIONS: { label: string; count: number }[] = [
-  { label: "六宫格", count: 6 },
-  { label: "九宫格", count: 9 },
-  { label: "十二宫格", count: 12 },
-  { label: "十五宫格", count: 15 },
-];
-
-interface StoryboardInputs {
-  charNames: string[];
-  sceneNames: string[];
-  propNames: string[];
-  grid: number;
-  story: string;
-}
-
-const SB_SHOTS = ["大远景", "中景", "近景", "特写", "过肩", "全景", "中近景", "特写", "远景"];
-const SB_CAMS = ["缓慢推镜", "固定机位", "轻微跟摇", "对拉", "右摇", "环绕", "手持", "拉镜", "升镜"];
-const xmlEsc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-// 生成一张分镜头脚本(宫格图)的本地 mock 图片(SVG data URL)。
-// 不发请求、不参与最终 prompt;真实后端会返回真实图片 URL。
-function buildStoryboardImage(inp: StoryboardInputs): { url: string; meta: string } {
-  const cols = 3;
-  const rows = Math.max(1, Math.ceil(inp.grid / cols));
-  const cw = 300, ch = 196, pad = 18, headH = 70;
-  const W = cols * cw + pad * 2;
-  const H = headH + rows * ch + pad * 2;
-
-  const cells: string[] = [];
-  for (let i = 0; i < inp.grid; i++) {
-    const r = Math.floor(i / cols), c = i % cols;
-    const x = pad + c * cw, y = headH + pad + r * ch;
-    const who = inp.charNames[i % Math.max(1, inp.charNames.length)] || "主角";
-    const where = inp.sceneNames[i % Math.max(1, inp.sceneNames.length)] || "主场景";
-    const n = String(i + 1).padStart(2, "0");
-    cells.push(
-      `<g>
-        <rect x="${x + 6}" y="${y + 6}" width="${cw - 12}" height="${ch - 12}" rx="8" fill="#1f2430" stroke="#3a4252" stroke-width="1.5"/>
-        <text x="${x + 20}" y="${y + 34}" fill="#7dd3fc" font-size="15" font-family="monospace" font-weight="700">镜 ${n}</text>
-        <text x="${x + 20}" y="${y + 60}" fill="#e5e7eb" font-size="14">${xmlEsc(SB_SHOTS[i % SB_SHOTS.length])} · ${xmlEsc(SB_CAMS[i % SB_CAMS.length])}</text>
-        <text x="${x + 20}" y="${y + ch - 44}" fill="#9ca3af" font-size="13">场景：${xmlEsc(where)}</text>
-        <text x="${x + 20}" y="${y + ch - 24}" fill="#9ca3af" font-size="13">出场：${xmlEsc(who)}</text>
-      </g>`,
-    );
-  }
-
-  const title = `分镜头脚本 · ${inp.grid} 宫格`;
-  const sub = [
-    inp.sceneNames[0] ? `场景：${inp.sceneNames[0]}` : "",
-    inp.story.trim() ? `梗概：${inp.story.trim().slice(0, 26)}` : "",
-  ].filter(Boolean).join("　");
-
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
-    `<rect width="${W}" height="${H}" fill="#11151c"/>` +
-    `<text x="${pad + 6}" y="34" fill="#ffffff" font-size="21" font-weight="700">${xmlEsc(title)}</text>` +
-    `<text x="${pad + 6}" y="57" fill="#9ca3af" font-size="13">${xmlEsc(sub)}</text>` +
-    cells.join("") +
-    `</svg>`;
-
-  const url = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
-  const meta = `${inp.grid} 宫格 · ${inp.charNames.length} 角色 · ${inp.sceneNames.length} 场景`;
-  return { url, meta };
-}
+type TextMode = "choose" | "hasScript" | "noScript";
 
 interface Step {
   key: string;
@@ -128,6 +119,15 @@ const FLOWS: Record<FlowId, FlowDef> = {
       { key: "color", q: "主色调？", opts: ["黑", "白", "金", "红", "蓝", "原木色"] },
     ],
   },
+  storyboard: {
+    kind: "image",
+    label: "生成分镜图",
+    steps: [
+      { key: "grid", q: "要几宫格的分镜图？", opts: ["六宫格", "九宫格", "十二宫格", "十五宫格"] },
+      { key: "genre", q: "短剧类型是？", opts: ["古装", "都市", "悬疑", "校园", "武侠", "甜宠", "科幻"] },
+      { key: "style", q: "分镜画风？", opts: ["黑白线稿", "素描草图", "彩色概念图"] },
+    ],
+  },
   story: {
     kind: "text",
     label: "剧情定制",
@@ -144,10 +144,15 @@ const FLOWS: Record<FlowId, FlowDef> = {
 
 const ADOPT_MSG: Record<FlowId, string> = {
   character: "✓ 已加入角色库，可在「字段 08 · 角色调用」中选用。",
-  scene: "✓ 已挂到「字段 04 · 场景」，左侧该字段已标记完成。",
-  prop: "✓ 已挂到「字段 06 · 道具」。",
+  scene: "✓ 已加入场景库（全公司可见），并选入本剧「字段 04 · 场景」，可在「场景库」中复用。",
+  prop: "✓ 已加入道具库（全公司可见），并选入本剧「字段 06 · 道具」，可在「道具库」中复用。",
   story: "✓ 已写入「字段 09 · 故事内容」。",
+  storyboard: "✓ 已导入「字段 07 · 分镜头脚本」，左侧可继续编辑或替换。",
 };
+
+// 子账号(Member)无新建素材库权限:生成的场景/道具图只挂到本项目字段,不进共享库。
+const MEMBER_SCENE_MSG = "✓ 已挂到本项目「字段 04 · 场景」。共享场景库仅母账号可新建，如需入库请联系母账号。";
+const MEMBER_PROP_MSG = "✓ 已挂到本项目「字段 06 · 道具」。共享道具库仅母账号可新建，如需入库请联系母账号。";
 
 const GEN_STATUS: Record<FlowKind, string[]> = {
   image: ["正在理解设定…", "构图与打光…", "渲染画面细节…"],
@@ -212,6 +217,51 @@ const hueOf = (s: string) => {
 const summaryOf = (def: FlowDef, ans: Ans) =>
   def.steps.map((s) => ans[s.key] || "AI 匹配").join(" · ");
 
+// 把向导的回答拼成一段中文描述提示词,喂给真实生成后端
+const PROMPT_HEAD: Record<FlowId, string> = {
+  character: "为短剧生成一张角色参考图,要求:",
+  scene: "为短剧生成一张场景参考图,要求:",
+  prop: "为短剧生成一张道具参考图,要求:",
+  story: "为短剧定制一段剧情与分镜方案,要求:",
+  storyboard: "为短剧生成一张分镜头脚本(storyboard),要求:",
+};
+function buildPrompt(id: FlowId, ans: Ans): string {
+  // 分镜头脚本:拼成「N 宫格 + 每格一个连续镜头 + 标镜号」的出图提示词。
+  if (id === "storyboard") {
+    const n = GRID_LABELS[ans.grid || "九宫格"] ?? 9;
+    const { cols, rows } = gridLayout(n);
+    const genre = ans.genre || "短剧";
+    const style = ans.style || "黑白线稿";
+    return (
+      `生成一张 ${n} 宫格的分镜头脚本(storyboard 故事板),严格排成 ${rows} 行 × ${cols} 列的等大网格,` +
+      `每格大小一致、对齐规整、格子间留细白边,按从左到右、从上到下的顺序,` +
+      `每一格画一个连续的电影镜头并在左上角标注镜号(①②③…);` +
+      `${style}分镜草图风格,${genre}题材,镜头之间动作连贯、可直接用于拍摄参考。` +
+      `画面只画分镜内容,不要添加任何未提及的元素。`
+    );
+  }
+  const def = FLOWS[id];
+  const parts = def.steps
+    .map((s) => {
+      const v = ans[s.key];
+      if (!v) return null;
+      return `${s.q.replace(/[？?]/g, "")}：${v}`;
+    })
+    .filter(Boolean);
+  return PROMPT_HEAD[id] + parts.join("；") + "。";
+}
+
+// 文字模型「自由聊天」的系统设定:纯对话,不回填工程、不输出 JSON。
+// 想真正填入工作台请走「已有剧本」导入或「没有剧本」向导。
+const CHAT_SYSTEM =
+  "你是「制影」AI 短剧创作助手。用简洁、友好的中文和用户自由聊天,围绕短剧创作、剧情、分镜、台词、运镜、配音等给建议或灵感。" +
+  "这是纯聊天:不要输出 JSON,也不要假装已经把内容写入工程或工作台。" +
+  "如果用户希望把内容真正填进工作台,提示他可以用文字模型里的「已有剧本」导入,或「没有剧本」逐步向导。";
+// 自由聊天最多带入的历史轮数(user+assistant 各算一条),避免上下文无限增长。
+const CHAT_HISTORY_MAX = 20;
+// 出图兜底单价:网关没返回 token 用量时,每张图按 0.3 元(30 分)计费。
+const IMAGE_FALLBACK_CENTS = 30;
+
 const I = {
   spark: (
     <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
@@ -256,109 +306,14 @@ const I = {
 };
 
 function Beats({ beats }: { beats: Beat[] }) {
-  const t = useT();
   return (
     <>
       {beats.map((b, i) => (
         <div className="beat" key={i}>
           <span className="bn">{b.n}</span>
-          {typeof b.text === "string" ? t(b.text) : b.text}
+          {b.text}
         </div>
       ))}
-    </>
-  );
-}
-
-type TextReplyKind = "greeting" | "help" | "thanks" | "idea";
-
-function classifyText(raw: string): TextReplyKind {
-  const v = raw.trim().toLowerCase();
-  if (
-    v.length <= 1 ||
-    /^(h(i|ello|ey)+|yo|你好|您好|哈喽|哈啰|嗨|嘿|在吗|在不在|在么|在不|早(上好)?|(上午|中午|下午|晚上)好|good\s*(morning|evening|afternoon|night))[!！.。~\s]*$/i.test(v)
-  )
-    return "greeting";
-  if (/(谢谢|多谢|感谢|辛苦了|thanks|thank\s*you|thx)/i.test(v)) return "thanks";
-  if (/(能做什么|会什么|怎么用|如何使用|使用说明|帮助|help|你是谁|有什么功能|功能介绍|怎么开始|不会用)/i.test(v))
-    return "help";
-  return "idea";
-}
-
-function IdeaBeats({ v }: { v: string }) {
-  const t = useT();
-  const tf = useTf();
-  return (
-    <Beats
-      beats={[
-        { n: "01", text: tf("开场：用一个抓人的画面带出「{v}」的核心情境。", { v }) },
-        { n: "02", text: t("转折：冲突或反差骤然出现，节奏提速，信息量拉满。") },
-        { n: "03", text: t("收束：情绪落点后留一个钩子，引向下一集。") },
-      ]}
-    />
-  );
-}
-
-function StreamBubble({
-  msg,
-  onAdopt,
-}: {
-  msg: Extract<Msg, { kind: "stream" }>;
-  onAdopt: (node: ReactNode) => void;
-}) {
-  const t = useT();
-  return (
-    <>
-      <span style={{ whiteSpace: "pre-wrap" }}>{msg.full.slice(0, msg.shown)}</span>
-      {!msg.done && <span className="ai-caret" />}
-      {msg.done && msg.idea != null && (
-        <>
-          <IdeaBeats v={msg.idea} />
-          <div className="ai-gen-actions">
-            <button className="btn btn-sm" onClick={() => onAdopt(<>{t("✓ 已写入「字段 09 · 故事内容」。")}</>)}>
-              {t("写入字段 09 故事内容")}
-            </button>
-          </div>
-        </>
-      )}
-    </>
-  );
-}
-
-function deriveScriptStats(text: string): { shots: number; chars: number } {
-  const lines = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-  const shots = Math.min(8, Math.max(3, lines.length || 4));
-  const chars = Math.max(2, Math.min(5, Math.ceil(shots / 2)));
-  return { shots, chars };
-}
-
-function ScriptImportResult({
-  shots,
-  chars,
-  onAdopt,
-}: {
-  shots: number;
-  chars: number;
-  onAdopt: (node: ReactNode) => void;
-}) {
-  const t = useT();
-  const tf = useTf();
-  return (
-    <>
-      <strong>{t("已解析剧本，识别到以下内容：")}</strong>
-      <br />
-      <span className="dim">
-        {tf("约 {shots} 个分镜、{chars} 位角色，已提取全局设定与故事梗概。", { shots, chars })}
-      </span>
-      <div className="ai-gen-actions">
-        <button
-          className="btn btn-sm"
-          onClick={() =>
-            onAdopt(<>{tf("✓ 已填入全局设定与 {shots} 个分镜，请在左侧逐项检查。", { shots })}</>)
-          }
-        >
-          {t("一键填入全局及分镜")}
-        </button>
-      </div>
     </>
   );
 }
@@ -366,15 +321,31 @@ function ScriptImportResult({
 type Msg =
   | { id: string; role: "user"; kind: "user"; text: string }
   | { id: string; role: "bot"; kind: "text"; node: ReactNode }
-  | { id: string; role: "bot"; kind: "loading"; label?: string }
+  | { id: string; role: "bot"; kind: "loading" }
   | { id: string; role: "bot"; kind: "genproc"; flowKind: FlowKind; pct: number; status: string; summary: string }
-  | { id: string; role: "bot"; kind: "result"; flowId: FlowId; ans: Ans; summary: string }
+  | { id: string; role: "bot"; kind: "result"; flowId: FlowId; ans: Ans; summary: string; imageUrl?: string; storyText?: string }
   | { id: string; role: "bot"; kind: "free"; freeKind: "image"; text: string }
-  | { id: string; role: "bot"; kind: "stream"; full: string; shown: number; done: boolean; idea: string | null }
-  | { id: string; role: "bot"; kind: "storyboard"; url: string; meta: string };
+  | { id: string; role: "bot"; kind: "freeimg"; imageUrl: string; prompt: string; storyboard?: boolean; sbStory?: string; sbGrid?: number }
+  | { id: string; role: "bot"; kind: "chat"; text: string };
 
 let seq = 0;
 const uid = () => "m" + ++seq;
+
+// 模块级缓存:AI 面板会话按项目 id 保存,切到角色库/其它页再回到工作台不丢内容。
+// (仅存活于当前会话内存;含 JSX 节点,不做持久化/刷新保留。)
+type Session = { messages: Msg[]; flowId: FlowId | null; flowStep: number; flowAns: Ans };
+interface PanelSnapshot {
+  model: ModelKind;
+  selectedModel: string;
+  messages: Msg[];
+  input: string;
+  flowId: FlowId | null;
+  flowStep: number;
+  flowAns: Ans;
+  sessions: Partial<Record<ModelKind, Session>>;
+  chatLog: ChatMessage[];
+}
+const panelCache = new Map<string, PanelSnapshot>();
 
 function Intro({ model }: { model: ModelKind }): ReactNode {
   const t = useT();
@@ -383,7 +354,7 @@ function Intro({ model }: { model: ModelKind }): ReactNode {
       <>
         {t("你好，我是生图助手。选一个入口，我会")}
         <strong>{t("一步一步问你几个问题")}</strong>
-        {t("，再为你生成参考图，可一键挂到对应字段。")}
+        {t("，再为你生成参考图：角色加入角色库，场景 / 道具加入对应素材库，并自动选入本剧。")}
       </>
     );
   return (
@@ -397,25 +368,158 @@ function Intro({ model }: { model: ModelKind }): ReactNode {
   );
 }
 
-type TextMode = "choose" | "hasScript" | "noScript";
+// localStorage 持久化:只存可序列化的消息(用户输入 / 出图 / 剧情结果),
+// 跳过含 JSX 的系统文案(text)与瞬时态(loading/genproc);开场白在恢复时按模型重建。
+const LS_PREFIX = "metamind-ai-panel:";
+const PERSIST_KINDS = new Set(["user", "result", "free", "freeimg", "chat"]);
+const serializableMsgs = (msgs: Msg[]): Msg[] => msgs.filter((m) => PERSIST_KINDS.has(m.kind));
+const withIntro = (model: ModelKind, msgs: Msg[]): Msg[] => [
+  { id: uid(), role: "bot", kind: "text", node: <Intro model={model} /> },
+  ...msgs,
+];
 
-export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPanelProps) {
+function saveLS(key: string, snap: PanelSnapshot) {
+  try {
+    const data = {
+      model: snap.model,
+      selectedModel: snap.selectedModel,
+      input: snap.input,
+      flowId: snap.flowId,
+      flowStep: snap.flowStep,
+      flowAns: snap.flowAns,
+      messages: serializableMsgs(snap.messages),
+      sessions: Object.fromEntries(
+        Object.entries(snap.sessions).map(([k, s]) => [
+          k,
+          s ? { ...s, messages: serializableMsgs(s.messages) } : s,
+        ]),
+      ),
+      chatLog: snap.chatLog,
+    };
+    localStorage.setItem(LS_PREFIX + key, JSON.stringify(data));
+  } catch {
+    /* 隐私模式 / 配额超限:静默忽略 */
+  }
+}
+
+function loadLS(key: string): PanelSnapshot | null {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + key);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as {
+      model?: ModelKind;
+      selectedModel?: string;
+      input?: string;
+      flowId?: FlowId | null;
+      flowStep?: number;
+      flowAns?: Ans;
+      messages?: Msg[];
+      sessions?: Partial<Record<ModelKind, Session>>;
+      chatLog?: ChatMessage[];
+    };
+    const model: ModelKind = d.model ?? "image";
+    const sessions: Partial<Record<ModelKind, Session>> = {};
+    for (const k of Object.keys(d.sessions ?? {}) as ModelKind[]) {
+      const s = d.sessions![k];
+      if (s) sessions[k] = { ...s, messages: withIntro(k, s.messages ?? []) };
+    }
+    return {
+      model,
+      selectedModel: d.selectedModel ?? MODEL_OPTIONS[model][0],
+      input: d.input ?? "",
+      flowId: d.flowId ?? null,
+      flowStep: d.flowStep ?? 0,
+      flowAns: d.flowAns ?? {},
+      messages: withIntro(model, d.messages ?? []),
+      sessions,
+      chatLog: d.chatLog ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function AiPanel({ project, setProject, characters, onCharactersChanged, onImportStoryboard }: AiPanelProps) {
   const t = useT();
   const tf = useTf();
-  const [model, setModel] = useState<ModelKind>("image");
-  const [selectedModel, setSelectedModel] = useState(MODEL_OPTIONS.image[0]);
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState("");
-  const [textMode, setTextMode] = useState<TextMode>("choose");
+  const configured = isMetamindConfigured();
+  const qc = useQueryClient();
+  // 会话缓存键:按项目 id。切到角色库等页面再切回工作台时从缓存恢复,不丢生成内容。
+  // 同会话内用内存缓存(全保真);跨刷新用 localStorage(只恢复可序列化内容)。
+  const cacheKey = project.id || "draft";
+  const cached = panelCache.get(cacheKey) ?? loadLS(cacheKey);
 
-  const [flowId, setFlowId] = useState<FlowId | null>(null);
-  const [flowStep, setFlowStep] = useState(0);
-  const [flowAns, setFlowAns] = useState<Ans>({});
-  const [storyboardOpen, setStoryboardOpen] = useState(false);
+  const [model, setModel] = useState<ModelKind>(cached?.model ?? "image");
+  const [selectedModel, setSelectedModel] = useState(cached?.selectedModel ?? MODEL_OPTIONS.image[0]);
+  const [messages, setMessages] = useState<Msg[]>(cached?.messages ?? []);
+  const [input, setInput] = useState(cached?.input ?? "");
+  const [textMode, setTextMode] = useState<TextMode>("choose");
+  // 点击生成图放大查看(灯箱)
+  const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+
+  const [flowId, setFlowId] = useState<FlowId | null>(cached?.flowId ?? null);
+  const [flowStep, setFlowStep] = useState(cached?.flowStep ?? 0);
+  const [flowAns, setFlowAns] = useState<Ans>(cached?.flowAns ?? {});
   const lastResult = useRef<{ flowId: FlowId; ans: Ans } | null>(null);
-  const lastStoryboard = useRef<StoryboardInputs | null>(null);
-  // 最近一次「生成」是普通流程还是分镜头脚本,决定「重新生成」走哪条
-  const lastGenKind = useRef<"flow" | "storyboard">("flow");
+
+  // 每个模型各自保存会话(消息 + 向导状态),切走再切回不丢历史。
+  const sessions = useRef<Partial<Record<ModelKind, Session>>>(cached?.sessions ?? {});
+
+  // 始终拿到最新 project,供异步采用回调使用
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const charSeq = useRef(0);
+  const sceneSeq = useRef(0);
+  const propSeq = useRef(0);
+  // 分镜头脚本整图的 b64(按 url 索引):本会话内裁切宫格时从 b64 裁(同源,不污染 canvas)。
+  const sbB64Ref = useRef<Map<string, string>>(new Map());
+  // R9:共享素材库只有母账号(Owner)能写;子账号生成的场景/道具图只能挂到本项目字段(不进共享库)。
+  const isOwner = useIsOwner();
+  // 文字模型自由聊天的上下文(多轮),与「导入/向导」无关,不回填工程。跨刷新从缓存恢复。
+  const chatLog = useRef<ChatMessage[]>(cached?.chatLog ?? []);
+
+  // 每次真实 AI 调用(出图/文本)都记一条任务,后端按 token 算费并扣余额,
+  // 与视频任务一致地出现在「使用记录」。失败不影响生成体验。
+  // 记一条 AI 用量任务到「使用记录」。
+  // - 有 token 用量(usage):按 token 让后端算费用并扣费;
+  // - 无 token(网关没回 usage,如部分出图模型):用兜底单价 fallbackCents 直接计费。
+  async function recordAiTask(
+    type: "ai_image" | "ai_text",
+    aiModel: string,
+    usage: AiUsage | null,
+    fallbackCents = 0,
+  ) {
+    try {
+      const created = await createTask({
+        project_id: projectRef.current.id,
+        type_id: type,
+        platform: "metamind",
+        upstream_model: aiModel,
+      });
+      if (usage && (usage.input_tokens > 0 || usage.output_tokens > 0)) {
+        await patchTask(created.id, {
+          status: "success",
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+        });
+      } else if (fallbackCents > 0) {
+        await patchTask(created.id, { status: "success", cost_cents: fallbackCents });
+      } else {
+        await patchTask(created.id, { status: "success" });
+      }
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["account"] });
+    } catch {
+      /* 记录失败不影响生成体验 */
+    }
+  }
+
+  // 任意状态变化都写回模块级缓存(同会话全保真)+ localStorage(跨刷新恢复)。
+  useEffect(() => {
+    const snap: PanelSnapshot = { model, selectedModel, messages, input, flowId, flowStep, flowAns, sessions: sessions.current, chatLog: chatLog.current };
+    panelCache.set(cacheKey, snap);
+    saveLS(cacheKey, snap);
+  }, [cacheKey, model, selectedModel, messages, input, flowId, flowStep, flowAns]);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
@@ -426,13 +530,16 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
 
   useEffect(() => {
     return () => {
-      timers.current.forEach((t) => window.clearInterval(t));
+      timers.current.forEach((id) => {
+        window.clearInterval(id);
+        window.clearTimeout(id);
+      });
     };
   }, []);
 
   const hint =
     model === "image"
-      ? "为角色 / 场景 / 道具生成参考图，可直接挂到对应字段。"
+      ? "为角色 / 场景 / 道具生成参考图，或生成分镜图（宫格）：角色入角色库，场景 / 道具入对应素材库，分镜图可导入「字段 07」。"
       : "生成短剧剧情、分镜脚本与台词建议。";
 
   const placeholder =
@@ -440,18 +547,31 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
       ? "描述你想生成的角色 / 场景 / 道具…"
       : "回答上面的问题，或自己描述剧情…";
 
-  function switchModel(next: ModelKind) {
-    setModel(next);
-    setSelectedModel(MODEL_OPTIONS[next][0]);
-    setFlowId(null);
-    setFlowStep(0);
-    setFlowAns({});
-    setStoryboardOpen(false);
-    setTextMode("choose");
-    const startMsgs: Msg[] = [{ id: uid(), role: "bot", kind: "text", node: <Intro model={next} /> }];
-    setMessages(startMsgs);
+  function freshSession(next: ModelKind): Session {
+    return {
+      messages: [{ id: uid(), role: "bot", kind: "text", node: <Intro model={next} /> }],
+      flowId: null,
+      flowStep: 0,
+      flowAns: {},
+    };
   }
 
+  function switchModel(next: ModelKind) {
+    if (next === model) return;
+    // 快照当前模型会话,便于切回时恢复
+    sessions.current[model] = { messages, flowId, flowStep, flowAns };
+    const restored = sessions.current[next] ?? freshSession(next);
+    setModel(next);
+    setSelectedModel(MODEL_OPTIONS[next][0]);
+    setMessages(restored.messages);
+    setFlowId(restored.flowId);
+    setFlowStep(restored.flowStep);
+    setFlowAns(restored.flowAns);
+    // 切到文字模型时回到入口分叉(已有剧本 / 没有剧本)
+    setTextMode("choose");
+  }
+
+  // 文字模型入口分叉:选「没有剧本」直接进向导,「已有剧本」展示上传面板
   function chooseText(mode: TextMode) {
     setTextMode(mode);
     if (mode === "noScript") startFlow("story");
@@ -462,25 +582,21 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
     setTextMode("choose");
   }
 
-  function importScript(name: string, shots: number, chars: number) {
-    const label = name || t("粘贴的剧本");
-    setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: tf("导入剧本：{name}", { name: label }) }]);
-    const lid = uid();
-    setMessages((m) => [...m, { id: lid, role: "bot", kind: "loading" }]);
-    const timer = window.setTimeout(() => {
-      setMessages((m) =>
-        m.map((x) =>
-          x.id === lid
-            ? { id: lid, role: "bot", kind: "text", node: <ScriptImportResult shots={shots} chars={chars} onAdopt={pushBotText} /> }
-            : x,
-        ),
-      );
-    }, 1100);
-    timers.current.push(timer);
+  function setGenproc(mid: string, status: string, pct: number) {
+    setMessages((m) => m.map((x) => (x.id === mid && x.kind === "genproc" ? { ...x, status, pct } : x)));
+  }
+  function failGen(mid: string, err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setMessages((m) =>
+      m.map((x) =>
+        x.id === mid
+          ? { id: mid, role: "bot", kind: "text", node: <span className="dim">{t("生成失败：") + msg}</span> }
+          : x,
+      ),
+    );
   }
 
   function startGeneration(id: FlowId, ans: Ans) {
-    lastGenKind.current = "flow";
     const def = FLOWS[id];
     const summary = summaryOf(def, ans);
     const mid = uid();
@@ -488,71 +604,237 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
       ...m,
       { id: mid, role: "bot", kind: "genproc", flowKind: def.kind, pct: 0, status: GEN_STATUS[def.kind][0], summary },
     ]);
-    let p = 0;
-    const steps = GEN_STATUS[def.kind];
-    const timer = window.setInterval(() => {
-      p = Math.min(100, p + 7 + Math.random() * 9);
-      const status = steps[Math.min(steps.length - 1, Math.floor(p / 34))];
-      const pct = p;
-      setMessages((m) => m.map((x) => (x.id === mid && x.kind === "genproc" ? { ...x, pct, status } : x)));
-      if (p >= 100) {
-        window.clearInterval(timer);
-        timers.current = timers.current.filter((t) => t !== timer);
-        const done = window.setTimeout(() => {
-          setMessages((m) => m.map((x) => (x.id === mid ? { id: mid, role: "bot", kind: "result", flowId: id, ans, summary } : x)));
-        }, 340);
-        timers.current.push(done);
-      }
-    }, 240);
-    timers.current.push(timer);
+
+    if (!configured) {
+      failGen(mid, new Error(t("未配置 AI 密钥，无法生成。")));
+      return;
+    }
+
+    const prompt = buildPrompt(id, ans);
+
+    if (def.kind === "image") {
+      setGenproc(mid, GEN_STATUS.image[0], 20);
+      (async () => {
+        let imgUsage: AiUsage | null = null;
+        try {
+          const b64 = await generateImage(prompt, {
+            onStatus: (s) => {
+              const pct = s === "success" ? 95 : s === "processing" ? 70 : 40;
+              setGenproc(mid, s === "processing" ? GEN_STATUS.image[1] : GEN_STATUS.image[0], pct);
+            },
+            onUsage: (u) => { imgUsage = u; },
+          });
+          setGenproc(mid, GEN_STATUS.image[2], 95);
+          const file = b64ToFile(b64, `${id}_${Date.now()}.png`);
+          const { url } = await uploadGlobalImage(file);
+          setMessages((m) =>
+            m.map((x) =>
+              x.id === mid ? { id: mid, role: "bot", kind: "result", flowId: id, ans, summary, imageUrl: url } : x,
+            ),
+          );
+          // 出图成功才记账:有 token 按 token,无则每张 0.3 元兜底
+          void recordAiTask("ai_image", selectedModel, imgUsage, IMAGE_FALLBACK_CENTS);
+        } catch (e) {
+          failGen(mid, e);
+        }
+      })();
+      return;
+    }
+
+    if (def.kind === "text") {
+      setGenproc(mid, GEN_STATUS.text[0], 30);
+      (async () => {
+        try {
+          const next = await generateAndFill(projectRef.current, prompt, {
+            onUsage: (u) => recordAiTask("ai_text", selectedModel, u),
+          });
+          setProject(next);
+          setMessages((m) =>
+            m.map((x) =>
+              x.id === mid
+                ? { id: mid, role: "bot", kind: "result", flowId: id, ans, summary, storyText: next.global.story }
+                : x,
+            ),
+          );
+        } catch (e) {
+          failGen(mid, e);
+        }
+      })();
+      return;
+    }
   }
 
-  // 分镜头脚本:跑一段「生成中」动画,完成后落一条 storyboard 结果消息
-  function startStoryboardGen(inp: StoryboardInputs) {
-    lastGenKind.current = "storyboard";
-    lastStoryboard.current = inp;
-    const { url, meta } = buildStoryboardImage(inp);
-    const mid = uid();
-    setMessages((m) => [
-      ...m,
-      { id: mid, role: "bot", kind: "genproc", flowKind: "image", pct: 0, status: GEN_STATUS.image[0], summary: meta },
-    ]);
-    let p = 0;
-    const steps = GEN_STATUS.image;
-    const timer = window.setInterval(() => {
-      p = Math.min(100, p + 7 + Math.random() * 9);
-      const status = steps[Math.min(steps.length - 1, Math.floor(p / 34))];
-      const pct = p;
-      setMessages((m) => m.map((x) => (x.id === mid && x.kind === "genproc" ? { ...x, pct, status } : x)));
-      if (p >= 100) {
-        window.clearInterval(timer);
-        timers.current = timers.current.filter((tt) => tt !== timer);
-        const done = window.setTimeout(() => {
-          setMessages((m) => m.map((x) => (x.id === mid ? { id: mid, role: "bot", kind: "storyboard", url, meta } : x)));
-        }, 340);
-        timers.current.push(done);
-      }
-    }, 240);
-    timers.current.push(timer);
+  // 建角色 + 把生成图作为「主图」真正上传(注册成角色素材 role=primary),再加入本剧。
+  async function addCharacterWithImage(name: string, descPrompt: string, imageUrl: string) {
+    const c = await createCharacter({
+      name,
+      role: "配角",
+      desc: descPrompt.slice(0, 200),
+      tags: ["AI 生成"],
+      ref_image_url: imageUrl,
+      ref_images: [imageUrl],
+      voice_sample_url: null,
+      hue: Math.floor(Math.random() * 360),
+    });
+    // 生成图已在我们自己的公开 TOS 上,直接用 URL 注册成主图(role_in_bundle=primary),
+    // 不再 fetch 文件(避免 TOS CORS 拦截)。失败不阻断建角色。
+    try {
+      await registerAssetUrl({
+        url: imageUrl,
+        character_id: c.id,
+        kind: "image",
+        role_in_bundle: "primary",
+        filename: `char_${Date.now()}.png`,
+      });
+    } catch (e) {
+      pushBotText(<span className="dim">{t("主图上传失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+    }
+    onCharactersChanged();
+    const cur = projectRef.current;
+    setProject({ ...cur, global: { ...cur.global, characters: [...(cur.global.characters ?? []), c.id] } });
   }
 
-  function handleStoryboardGenerate(inp: StoryboardInputs) {
-    setStoryboardOpen(false);
-    const parts = [
-      tf("{n} 宫格", { n: inp.grid }),
-      inp.charNames.length ? tf("角色：{v}", { v: inp.charNames.join("、") }) : null,
-      inp.sceneNames.length ? tf("场景：{v}", { v: inp.sceneNames.join("、") }) : null,
-      inp.propNames.length ? tf("道具：{v}", { v: inp.propNames.join("、") }) : null,
-    ].filter(Boolean);
-    setMessages((m) => [
-      ...m,
-      { id: uid(), role: "user", kind: "user", text: tf("生成分镜头脚本 · {v}", { v: parts.join(" · ") }) },
-    ]);
-    startStoryboardGen(inp);
+  // 生图的场景图采用:
+  //   - 母账号(Owner) → 入「场景库」(createScene,org 级共享,全公司可见),再选进本剧;
+  //   - 子账号(Member) → 无建库权限,仅挂到本项目「字段 04 · 场景」(项目内,不进共享库)。
+  async function addSceneToLibrary(name: string, imageUrl: string) {
+    if (isOwner) {
+      const s = await createScene({ name, image_url: imageUrl, hue: avatarHue(name) });
+      qc.invalidateQueries({ queryKey: ["scenes"] });
+      const cur = projectRef.current;
+      const ids = [...(cur.global.scenes ?? [])];
+      if (!ids.includes(s.id)) ids.push(s.id);
+      const scene_image = ids[0] === s.id ? imageUrl : cur.global.scene_image;
+      setProject({ ...cur, global: { ...cur.global, scenes: ids, scene_image } });
+      pushBotText(<>{ADOPT_MSG.scene}</>);
+    } else {
+      const cur = projectRef.current;
+      setProject({ ...cur, global: { ...cur.global, scene_image: imageUrl } });
+      pushBotText(<>{MEMBER_SCENE_MSG}</>);
+    }
+  }
+
+  // 生图的道具图采用:同上,母账号入「道具库」共享,子账号仅挂本项目字段。
+  async function addPropToLibrary(name: string, imageUrl: string) {
+    if (isOwner) {
+      const pr = await createProp({ name, image_url: imageUrl, hue: avatarHue(name) });
+      qc.invalidateQueries({ queryKey: ["props"] });
+      const cur = projectRef.current;
+      const ids = [...(cur.global.props ?? [])];
+      if (!ids.includes(pr.id)) ids.push(pr.id);
+      const prop_image_url = ids[0] === pr.id ? imageUrl : cur.global.prop_image_url;
+      setProject({ ...cur, global: { ...cur.global, props: ids, prop_image_url } });
+      pushBotText(<>{ADOPT_MSG.prop}</>);
+    } else {
+      const cur = projectRef.current;
+      setProject({ ...cur, global: { ...cur.global, prop_image_url: imageUrl } });
+      pushBotText(<>{MEMBER_PROP_MSG}</>);
+    }
+  }
+
+  // 把生成结果真正挂到项目 / 角色库
+  async function adoptResult(
+    flowId: FlowId,
+    ans: Ans,
+    imageUrl: string | undefined,
+    storyText: string | undefined,
+    name?: string,
+  ) {
+    const p = projectRef.current;
+    if (flowId === "character" && imageUrl) {
+      try {
+        const fallbackN = characters.length + ++charSeq.current;
+        const finalName = (name && name.trim()) || (ans.identity ? `${t(ans.identity)} · AI` : `AI 角色 ${fallbackN}`);
+        await addCharacterWithImage(finalName, buildPrompt("character", ans), imageUrl);
+      } catch (e) {
+        pushBotText(<span className="dim">{t("加入角色库失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+        return;
+      }
+    } else if (flowId === "scene" && imageUrl) {
+      try {
+        const sName = (name && name.trim()) || (ans.place ? `${t(ans.place)} · AI` : `AI 场景 ${++sceneSeq.current}`);
+        await addSceneToLibrary(sName, imageUrl);
+      } catch (e) {
+        pushBotText(<span className="dim">{t("加入场景库失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+        return;
+      }
+    } else if (flowId === "prop" && imageUrl) {
+      try {
+        const pName = (name && name.trim()) || (ans.ptype ? `${t(ans.ptype)} · AI` : `AI 道具 ${++propSeq.current}`);
+        await addPropToLibrary(pName, imageUrl);
+      } catch (e) {
+        pushBotText(<span className="dim">{t("加入道具库失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+        return;
+      }
+    } else if (flowId === "storyboard" && imageUrl) {
+      // 分镜头脚本宫格图 → 导入「字段 07 · 分镜头脚本」(global.storyboard_image_url)
+      onImportStoryboard?.(imageUrl);
+    } else if (flowId === "story") {
+      // generateAndFill 已写入 global.story;此处确保再应用一次
+      if (storyText) setProject({ ...p, global: { ...p.global, story: storyText } });
+    }
+    // scene / prop 的提示已在 addSceneToLibrary / addPropToLibrary 内按权限分别 push,这里只补其它。
+    if (flowId === "character" || flowId === "story" || flowId === "storyboard") {
+      pushBotText(<>{ADOPT_MSG[flowId]}</>);
+    }
+  }
+
+  // 自由出图结果的采用:挂到场景 / 道具 / 角色库
+  async function adoptFreeImage(target: "scene" | "prop" | "character", url: string, prompt: string, name?: string) {
+    if (target === "scene") {
+      try {
+        const sName = (name && name.trim()) || `AI 场景 ${++sceneSeq.current}`;
+        await addSceneToLibrary(sName, url); // 成功提示已在 helper 内按权限 push
+      } catch (e) {
+        pushBotText(<span className="dim">{t("加入场景库失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+      }
+    } else if (target === "prop") {
+      try {
+        const pName = (name && name.trim()) || `AI 道具 ${++propSeq.current}`;
+        await addPropToLibrary(pName, url); // 成功提示已在 helper 内按权限 push
+      } catch (e) {
+        pushBotText(<span className="dim">{t("加入道具库失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+      }
+    } else {
+      try {
+        const finalName = (name && name.trim()) || `AI 角色 ${characters.length + ++charSeq.current}`;
+        await addCharacterWithImage(finalName, prompt, url);
+        pushBotText(<>{ADOPT_MSG.character}</>);
+      } catch (e) {
+        pushBotText(<span className="dim">{t("加入角色库失败：") + (e instanceof Error ? e.message : String(e))}</span>);
+      }
+    }
+  }
+
+  // 分镜头脚本导入:
+  //   - 仅整图:直接转发,写字段 07。
+  //   - 整图 + 自动建分镜:先按 行×列 严格裁切宫格→每格上传,拿到 cells;再连同 story/count 转发,
+  //     EditorPage 据此建 N 个分镜并把第 k 格图配给第 k 个分镜。裁切失败则退化为「只建分镜、不配格图」。
+  async function importStoryboard(url: string, opts?: { story?: string; count?: number }) {
+    if (!(opts?.story && opts?.count)) {
+      onImportStoryboard?.(url);
+      pushBotText(<>{ADOPT_MSG.storyboard}</>);
+      return;
+    }
+    const count = opts.count;
+    pushBotText(<span className="dim">{tf("正在按 {n} 格裁切分镜头脚本并建立分镜…", { n: count })}</span>);
+    let cells: string[] = [];
+    try {
+      const src = sbB64Ref.current.get(url) ?? url; // 优先 b64(同源),退化到公网 URL
+      cells = await cropGridToUrls(src, count);
+    } catch (e) {
+      console.warn("[storyboard] 裁切宫格失败,改为只建分镜不配格图:", e);
+      cells = [];
+    }
+    onImportStoryboard?.(url, { story: opts.story, count, cells });
+    pushBotText(
+      <>{cells.length
+        ? tf("✓ 已导入整图，并裁出 {n} 格分别配给 {n} 个分镜（左侧分镜层可逐格修改）。", { n: count })
+        : tf("✓ 已导入整图，并按剧情自动建 {n} 个分镜（格图裁切失败，未逐格配图）。", { n: count })}</>,
+    );
   }
 
   function startFlow(id: FlowId) {
-    setStoryboardOpen(false);
     setFlowId(id);
     setFlowStep(0);
     setFlowAns({});
@@ -577,93 +859,147 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
     setFlowStep(Math.max(0, Math.min(i, FLOWS[flowId].steps.length - 1)));
   }
   function regen() {
-    if (lastGenKind.current === "storyboard" && lastStoryboard.current) {
-      startStoryboardGen(lastStoryboard.current);
-    } else if (lastResult.current) {
-      startGeneration(lastResult.current.flowId, lastResult.current.ans);
-    }
+    if (lastResult.current) startGeneration(lastResult.current.flowId, lastResult.current.ans);
   }
   function pushBotText(node: ReactNode) {
     setMessages((m) => [...m, { id: uid(), role: "bot", kind: "text", node }]);
   }
 
-  function sendPreset(i: number) {
-    const p = TEXT_PRESETS[i];
-    setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: t(p.q) }]);
-    const lid = uid();
-    setMessages((m) => [...m, { id: lid, role: "bot", kind: "loading" }]);
-    const timer = window.setTimeout(() => {
-      setMessages((m) =>
-        m.map((x) =>
-          x.id === lid
-            ? {
-                id: lid,
-                role: "bot",
-                kind: "text",
-                node: (
-                  <>
-                    <strong>{t(p.title)}</strong> · {t(p.meta)}
-                    <br />
-                    <span className="dim">{t(p.hook)}</span>
-                    <Beats beats={p.beats} />
-                  </>
-                ),
-              }
-            : x,
-        ),
-      );
-    }, 1000);
-    timers.current.push(timer);
+  function replaceMsg(id: string, msg: Msg) {
+    setMessages((m) => m.map((x) => (x.id === id ? msg : x)));
   }
 
-  function streamReply(full: string, idea: string | null) {
+  function sendPreset(i: number) {
+    const p = TEXT_PRESETS[i];
+    setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: p.q }]);
+    // 先给出题材预览卡
+    pushBotText(
+      <>
+        <strong>{p.title}</strong> · {p.meta}
+        <br />
+        <span className="dim">{p.hook}</span>
+        <Beats beats={p.beats} />
+      </>,
+    );
+    if (!configured) {
+      pushBotText(<span className="dim">{t("未配置 AI 密钥，无法生成。")}</span>);
+      return;
+    }
+    // 调真实大模型,把题材写进工程(字段 09 故事内容 + 分镜)
     const mid = uid();
-    setMessages((m) => [...m, { id: mid, role: "bot", kind: "loading", label: t("正在思考…") }]);
-    const startTimer = window.setTimeout(() => {
-      setMessages((m) => m.map((x) => (x.id === mid ? { id: mid, role: "bot", kind: "stream", full, shown: 0, done: false, idea } : x)));
-      let shown = 0;
-      const timer = window.setInterval(() => {
-        shown = Math.min(full.length, shown + 2);
-        const done = shown >= full.length;
-        setMessages((m) => m.map((x) => (x.id === mid && x.kind === "stream" ? { ...x, shown, done } : x)));
-        if (done) {
-          window.clearInterval(timer);
-          timers.current = timers.current.filter((tt) => tt !== timer);
-        }
-      }, 26);
-      timers.current.push(timer);
-    }, 650);
-    timers.current.push(startTimer);
+    setMessages((m) => [
+      ...m,
+      { id: mid, role: "bot", kind: "genproc", flowKind: "text", pct: 30, status: GEN_STATUS.text[0], summary: p.q },
+    ]);
+    const desc = `${p.q}。${p.title}，${p.meta}。${p.hook}`;
+    (async () => {
+      try {
+        const next = await generateAndFill(projectRef.current, desc, {
+          onUsage: (u) => recordAiTask("ai_text", selectedModel, u),
+        });
+        setProject(next);
+        replaceMsg(mid, { id: mid, role: "bot", kind: "text", node: <span>{t("✓ 已写入「字段 09 · 故事内容」。")}</span> });
+      } catch (e) {
+        failGen(mid, e);
+      }
+    })();
+  }
+
+  // 导入已有剧本:把整段剧本喂给真实大模型,忠实整理成结构化分镜并填入工程。
+  function importScript(script: string) {
+    const v = script.trim();
+    if (!v) return;
+    setMessages((m) => [
+      ...m,
+      { id: uid(), role: "user", kind: "user", text: t("【导入剧本】") + v.slice(0, 60) + (v.length > 60 ? "…" : "") },
+    ]);
+    if (!configured) {
+      pushBotText(<span className="dim">{t("未配置 AI 密钥，无法生成。")}</span>);
+      return;
+    }
+    const mid = uid();
+    setMessages((m) => [
+      ...m,
+      { id: mid, role: "bot", kind: "genproc", flowKind: "text", pct: 30, status: GEN_STATUS.text[0], summary: t("导入已有剧本") },
+    ]);
+    const prompt = t("以下是已有剧本，请忠实整理成结构化分镜，尽量保留原文，不要随意扩写：") + "\n\n" + v;
+    (async () => {
+      try {
+        const next = await generateAndFill(projectRef.current, prompt, {
+          onUsage: (u) => recordAiTask("ai_text", selectedModel, u),
+        });
+        setProject(next);
+        replaceMsg(mid, { id: mid, role: "bot", kind: "text", node: <span>{t("✓ 已写入「字段 09 · 故事内容」。")}</span> });
+      } catch (e) {
+        failGen(mid, e);
+      }
+    })();
   }
 
   function freeSend(v: string) {
     setMessages((m) => [...m, { id: uid(), role: "user", kind: "user", text: v }]);
+    if (!configured) {
+      pushBotText(<span className="dim">{t("未配置 AI 密钥，无法生成。")}</span>);
+      return;
+    }
+    const captured = model;
 
-    if (model === "text") {
-      const c = classifyText(v);
-      if (c === "idea") {
-        streamReply(tf("好的，我按「{v}」帮你拓展一段短剧的分镜：", { v }), v);
-      } else if (c === "greeting") {
-        streamReply(t("你好！我是剧情助手。直接描述你想要的短剧——题材、主角，或一句话梗概都行，我就帮你拓展成分镜；也可以点下面的选项让我一步步问你。"), null);
-      } else if (c === "help") {
-        streamReply(t("我可以根据你的想法生成短剧剧情与分镜：给我题材、主角或一句话梗概，我会拓展成「开场 / 转折 / 收束」的分镜。你也可以切到「已有剧本」导入并一键填入。"), null);
-      } else {
-        streamReply(t("不客气！想继续拓展剧情或调整分镜，随时告诉我。"), null);
-      }
+    const mid = uid();
+
+    if (captured === "image") {
+      // 秦总案例:自由文本里带「N 宫格 / 分镜头」→ 识别为分镜头脚本意图,
+      // 把整段剧情按宫格数画成 storyboard,并在结果上提供「导入到分镜头脚本」。
+      const sb = detectStoryboardIntent(v);
+      const imgPrompt = sb.hit ? buildStoryboardPromptFromText(v, sb.grid) : v;
+      setMessages((m) => [
+        ...m,
+        { id: mid, role: "bot", kind: "genproc", flowKind: "image", pct: 20, status: GEN_STATUS.image[0], summary: v },
+      ]);
+      (async () => {
+        let imgUsage: AiUsage | null = null;
+        try {
+          const b64 = await generateImage(imgPrompt, {
+            onStatus: (s) => {
+              const pct = s === "success" ? 95 : s === "processing" ? 70 : 40;
+              setGenproc(mid, s === "processing" ? GEN_STATUS.image[1] : GEN_STATUS.image[0], pct);
+            },
+            onUsage: (u) => { imgUsage = u; },
+          });
+          setGenproc(mid, GEN_STATUS.image[2], 95);
+          const file = b64ToFile(b64, `free_${Date.now()}.png`);
+          const { url } = await uploadGlobalImage(file);
+          // 分镜头脚本:缓存整图 b64(按 url),后续裁切宫格走 b64(同源,不触发 canvas 污染)
+          if (sb.hit) sbB64Ref.current.set(url, b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`);
+          replaceMsg(mid, { id: mid, role: "bot", kind: "freeimg", imageUrl: url, prompt: imgPrompt, storyboard: sb.hit, sbStory: sb.hit ? v : undefined, sbGrid: sb.hit ? sb.grid : undefined });
+          void recordAiTask("ai_image", selectedModel, imgUsage, IMAGE_FALLBACK_CENTS);
+        } catch (e) {
+          failGen(mid, e);
+        }
+      })();
       return;
     }
 
-    const lid = uid();
-    setMessages((m) => [...m, { id: lid, role: "bot", kind: "loading" }]);
-    const timer = window.setTimeout(() => {
-      setMessages((m) =>
-        m.map((x) => (x.id === lid ? { id: lid, role: "bot", kind: "free", freeKind: "image", text: v } : x)),
-      );
-    }, 1000);
-    timers.current.push(timer);
+    // text:未选「已有剧本/没有剧本」时的自由输入 = 跟模型聊天(多轮上下文),不回填工程。
+    setMessages((m) => [...m, { id: mid, role: "bot", kind: "loading" }]);
+    chatLog.current.push({ role: "user", content: v });
+    if (chatLog.current.length > CHAT_HISTORY_MAX) {
+      chatLog.current = chatLog.current.slice(-CHAT_HISTORY_MAX);
+    }
+    (async () => {
+      try {
+        const reply = await chatComplete([{ role: "system", content: CHAT_SYSTEM }, ...chatLog.current], {
+          onUsage: (u) => recordAiTask("ai_text", selectedModel, u),
+        });
+        chatLog.current.push({ role: "assistant", content: reply });
+        replaceMsg(mid, { id: mid, role: "bot", kind: "chat", text: reply });
+      } catch (e) {
+        failGen(mid, e);
+      }
+    })();
   }
 
   function onSend() {
+    if (!configured) return;
     const v = input.trim();
     if (!v) return;
     setInput("");
@@ -682,7 +1018,7 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
           </span>
           <span className="ai-conn mono">
             <span className="ai-dot" />
-            {t("已连接")}
+            {configured ? t("已连接") : t("未配置密钥")}
           </span>
         </div>
         <div className="segmented ai-model">
@@ -712,13 +1048,7 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
 
       <div className="ai-body" ref={bodyRef}>
         {messages.map((m) => (
-          <MessageRow
-            key={m.id}
-            msg={m}
-            onAdopt={pushBotText}
-            onRegen={regen}
-            onImportStoryboard={onImportStoryboard}
-          />
+          <MessageRow key={m.id} msg={m} onAdopt={pushBotText} onAdoptResult={adoptResult} onAdoptImage={adoptFreeImage} onImportStoryboard={importStoryboard} onZoom={setZoomUrl} onRegen={regen} />
         ))}
       </div>
 
@@ -728,16 +1058,6 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
         flowId={flowId}
         flowStep={flowStep}
         flowAns={flowAns}
-        characters={characters}
-        scenes={scenes}
-        props={props}
-        storyboardOpen={storyboardOpen}
-        onStartStoryboard={() => {
-          setFlowId(null);
-          setStoryboardOpen(true);
-        }}
-        onStoryboardGenerate={handleStoryboardGenerate}
-        onStoryboardCancel={() => setStoryboardOpen(false)}
         onStart={startFlow}
         onCancel={() => {
           setFlowId(null);
@@ -764,24 +1084,75 @@ export function AiPanel({ characters, scenes, props, onImportStoryboard }: AiPan
             if (e.key === "Enter") onSend();
           }}
         />
-        <button className="ai-send" title={t("发送")} onClick={onSend}>
+        <button className="ai-send" title={t("发送")} onClick={onSend} disabled={!configured}>
           {I.send}
         </button>
       </div>
+      {!configured && (
+        <div className="ai-sub" style={{ padding: "0 12px 8px" }}>
+          {t("未配置 AI 密钥：请在 web/.env.local 设置 VITE_METAMIND_API_KEY 后重试。")}
+        </div>
+      )}
+      {zoomUrl && (
+        <div
+          onClick={() => setZoomUrl(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,.82)",
+            display: "grid", placeItems: "center", padding: 24, cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={zoomUrl}
+            alt={t("放大查看")}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "92vw", maxHeight: "92vh", objectFit: "contain", borderRadius: 8, boxShadow: "0 12px 48px rgba(0,0,0,.5)" }}
+          />
+          <button
+            onClick={() => setZoomUrl(null)}
+            title={t("关闭")}
+            style={{
+              position: "fixed", top: 16, right: 16,
+              width: 34, height: 34, borderRadius: "50%", border: "none",
+              color: "#fff", background: "rgba(0,0,0,.45)", fontSize: 18, lineHeight: 1, cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
 
+type AdoptResultFn = (
+  flowId: FlowId,
+  ans: Ans,
+  imageUrl: string | undefined,
+  storyText: string | undefined,
+  name?: string,
+) => void;
+
+type AdoptImageFn = (target: "scene" | "prop" | "character", url: string, prompt: string, name?: string) => void;
+type ImportStoryboardFn = (imageUrl: string, opts?: { story?: string; count?: number }) => void;
+type ZoomFn = (url: string) => void;
+
 function MessageRow({
   msg,
   onAdopt,
-  onRegen,
+  onAdoptResult,
+  onAdoptImage,
   onImportStoryboard,
+  onZoom,
+  onRegen,
 }: {
   msg: Msg;
   onAdopt: (node: ReactNode) => void;
+  onAdoptResult: AdoptResultFn;
+  onAdoptImage: AdoptImageFn;
+  onImportStoryboard: ImportStoryboardFn;
+  onZoom: ZoomFn;
   onRegen: () => void;
-  onImportStoryboard: (script: string) => void;
 }) {
   const t = useT();
   const ava =
@@ -794,7 +1165,7 @@ function MessageRow({
     <div className={"ai-msg " + (msg.role === "user" ? "user" : "bot")}>
       {ava}
       <div className="ai-bubble">
-        <MessageBody msg={msg} onAdopt={onAdopt} onRegen={onRegen} onImportStoryboard={onImportStoryboard} />
+        <MessageBody msg={msg} onAdopt={onAdopt} onAdoptResult={onAdoptResult} onAdoptImage={onAdoptImage} onImportStoryboard={onImportStoryboard} onZoom={onZoom} onRegen={onRegen} />
       </div>
     </div>
   );
@@ -803,35 +1174,32 @@ function MessageRow({
 function MessageBody({
   msg,
   onAdopt,
-  onRegen,
+  onAdoptResult,
+  onAdoptImage,
   onImportStoryboard,
+  onZoom,
+  onRegen,
 }: {
   msg: Msg;
   onAdopt: (node: ReactNode) => void;
+  onAdoptResult: AdoptResultFn;
+  onAdoptImage: AdoptImageFn;
+  onImportStoryboard: ImportStoryboardFn;
+  onZoom: ZoomFn;
   onRegen: () => void;
-  onImportStoryboard: (script: string) => void;
 }) {
   const t = useT();
   if (msg.kind === "user") return <>{msg.text}</>;
   if (msg.kind === "text") return <>{msg.node}</>;
+  if (msg.kind === "chat") return <span style={{ whiteSpace: "pre-wrap" }}>{msg.text}</span>;
   if (msg.kind === "loading")
-    return msg.label ? (
-      <span className="ai-thinking">
-        <span className="ai-thinking-label">{msg.label}</span>
-        <span className="ai-dots">
-          <i />
-          <i />
-          <i />
-        </span>
-      </span>
-    ) : (
+    return (
       <span className="ai-dots">
         <i />
         <i />
         <i />
       </span>
     );
-  if (msg.kind === "stream") return <StreamBubble msg={msg} onAdopt={onAdopt} />;
   if (msg.kind === "genproc") {
     return (
       <div className="ai-genproc">
@@ -847,6 +1215,9 @@ function MessageBody({
         </div>
       </div>
     );
+  }
+  if (msg.kind === "freeimg") {
+    return <FreeImgCard imageUrl={msg.imageUrl} prompt={msg.prompt} storyboard={msg.storyboard} sbStory={msg.sbStory} sbGrid={msg.sbGrid} onAdoptImage={onAdoptImage} onImportStoryboard={onImportStoryboard} onZoom={onZoom} />;
   }
   if (msg.kind === "free") {
     const hue = hueOf(msg.text);
@@ -864,70 +1235,91 @@ function MessageBody({
       </>
     );
   }
-  if (msg.kind === "storyboard") {
-    return (
-      <StoryboardCard
-        url={msg.url}
-        meta={msg.meta}
-        onAdopt={onAdopt}
-        onRegen={onRegen}
-        onImportStoryboard={onImportStoryboard}
-      />
-    );
-  }
   // result
-  return <ResultCard flowId={msg.flowId} ans={msg.ans} summary={msg.summary} onAdopt={onAdopt} onRegen={onRegen} />;
+  return (
+    <ResultCard
+      flowId={msg.flowId}
+      ans={msg.ans}
+      summary={msg.summary}
+      imageUrl={msg.imageUrl}
+      storyText={msg.storyText}
+      onAdoptResult={onAdoptResult}
+      onZoom={onZoom}
+      onRegen={onRegen}
+    />
+  );
 }
 
-function StoryboardCard({
-  url,
-  meta,
-  onAdopt,
-  onRegen,
+function FreeImgCard({
+  imageUrl,
+  prompt,
+  storyboard,
+  sbStory,
+  sbGrid,
+  onAdoptImage,
   onImportStoryboard,
+  onZoom,
 }: {
-  url: string;
-  meta: string;
-  onAdopt: (node: ReactNode) => void;
-  onRegen: () => void;
-  onImportStoryboard: (url: string) => void;
+  imageUrl: string;
+  prompt: string;
+  storyboard?: boolean;
+  sbStory?: string;
+  sbGrid?: number;
+  onAdoptImage: AdoptImageFn;
+  onImportStoryboard: ImportStoryboardFn;
+  onZoom: ZoomFn;
 }) {
   const t = useT();
+  const tf = useTf();
+  const [charName, setCharName] = useState("");
+  // 秦总案例:识别为分镜头脚本时,结果给两个入口 ——
+  //   ① 只导入整图到「字段 07」;② 整图 + 按故事自动建 N 个分镜(分镜层)。
+  if (storyboard) {
+    const n = sbGrid ?? 9;
+    return (
+      <>
+        {t("已根据剧情生成分镜图：")}
+        <div className="ai-scene-img">
+          <img src={imageUrl} alt={t("分镜头脚本")} style={{ cursor: "zoom-in" }} onClick={() => onZoom(imageUrl)} />
+        </div>
+        <div className="ai-gen-actions">
+          <button className="btn btn-sm" onClick={() => onImportStoryboard(imageUrl)}>
+            {t("仅导入整图")}
+          </button>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => onImportStoryboard(imageUrl, { story: sbStory, count: n })}
+          >
+            {tf("整图 + 自动建 {n} 个分镜", { n })}
+          </button>
+        </div>
+      </>
+    );
+  }
   return (
     <>
-      <strong>{t("已生成分镜头脚本图：")}</strong>
-      <span className="dim" style={{ marginLeft: 6, fontSize: 11 }}>
-        {meta}
-      </span>
-      <div
-        style={{
-          marginTop: 8,
-          padding: 6,
-          background: "#0b0d12",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        <ZoomableImage
-          src={url}
-          alt={t("分镜头脚本图")}
-          style={{ maxWidth: "100%", maxHeight: 260, objectFit: "contain", display: "block" }}
-        />
+      {t("已根据描述生成参考图：")}
+      <div className="ai-scene-img">
+        <img src={imageUrl} alt={t("参考图")} style={{ cursor: "zoom-in" }} onClick={() => onZoom(imageUrl)} />
       </div>
       <div className="ai-gen-actions">
-        <button
-          className="btn btn-sm"
-          onClick={() => {
-            onImportStoryboard(url);
-            onAdopt(<>{t("✓ 已导入到「字段 07 · 分镜头脚本」，左侧可继续编辑或替换。")}</>);
-          }}
-        >
-          {t("导入到分镜头脚本")}
+        <button className="btn btn-sm" onClick={() => onAdoptImage("scene", imageUrl, prompt)}>
+          {t("用作字段 04 场景图")}
         </button>
-        <button className="btn btn-sm btn-ghost" onClick={onRegen}>
-          {t("重新生成")}
+        <button className="btn btn-sm" onClick={() => onAdoptImage("prop", imageUrl, prompt)}>
+          {t("用作字段 06 道具")}
+        </button>
+      </div>
+      <input
+        className="input"
+        style={{ marginTop: 8, padding: "8px 10px", fontSize: 13 }}
+        placeholder={t("给角色起个名字…")}
+        value={charName}
+        onChange={(e) => setCharName(e.target.value)}
+      />
+      <div className="ai-gen-actions">
+        <button className="btn btn-sm btn-ghost" onClick={() => onAdoptImage("character", imageUrl, prompt, charName)}>
+          {t("加入角色库")}
         </button>
       </div>
     </>
@@ -938,19 +1330,29 @@ function ResultCard({
   flowId,
   ans,
   summary,
-  onAdopt,
+  imageUrl,
+  storyText,
+  onAdoptResult,
+  onZoom,
   onRegen,
 }: {
   flowId: FlowId;
   ans: Ans;
   summary: string;
-  onAdopt: (node: ReactNode) => void;
+  imageUrl?: string;
+  storyText?: string;
+  onAdoptResult: AdoptResultFn;
+  onZoom: ZoomFn;
   onRegen: () => void;
 }) {
   const t = useT();
   const tf = useTf();
+  const [charName, setCharName] = useState("");
+  const zoomable = imageUrl
+    ? { style: { cursor: "zoom-in" as const }, onClick: () => onZoom(imageUrl) }
+    : {};
   const adopt = (label: string) => (
-    <button className="btn btn-sm" onClick={() => onAdopt(<>{ADOPT_MSG[flowId]}</>)}>
+    <button className="btn btn-sm" onClick={() => onAdoptResult(flowId, ans, imageUrl, storyText)}>
       {label}
     </button>
   );
@@ -967,17 +1369,57 @@ function ResultCard({
       <>
         {t("已按你的回答生成角色参考图：")}
         <div className="ai-gen">
-          <div className="ai-gen-port" style={{ ["--ph" as string]: hue }}>
-            {letter}
-          </div>
+          {imageUrl ? (
+            <img className="ai-gen-port" src={imageUrl} alt={t("角色参考图")} {...zoomable} />
+          ) : (
+            <div className="ai-gen-port" style={{ ["--ph" as string]: hue }}>
+              {letter}
+            </div>
+          )}
           <div className="ai-gen-meta">
             <div className="t">{t("新角色 · 待命名")}</div>
             <div className="d">{summary}</div>
           </div>
         </div>
+        <input
+          className="input"
+          style={{ marginTop: 8, padding: "8px 10px", fontSize: 13 }}
+          placeholder={t("给角色起个名字…")}
+          value={charName}
+          onChange={(e) => setCharName(e.target.value)}
+        />
         <div className="ai-gen-actions">
-          {adopt(t("加入角色库"))}
+          <button
+            className="btn btn-sm"
+            disabled={!imageUrl}
+            onClick={() => onAdoptResult(flowId, ans, imageUrl, storyText, charName)}
+          >
+            {t("加入角色库")}
+          </button>
           {regen(t("重新生成"))}
+        </div>
+      </>
+    );
+  }
+  if (flowId === "storyboard") {
+    return (
+      <>
+        {tf("已生成「{grid}」分镜图：", { grid: t(ans.grid || "九宫格") })}
+        {imageUrl ? (
+          <div className="ai-scene-img">
+            <img src={imageUrl} alt={t("分镜头脚本")} {...zoomable} />
+          </div>
+        ) : (
+          <div className="ai-scene-img">
+            <span>STORYBOARD · {t(ans.grid || "九宫格")}</span>
+          </div>
+        )}
+        <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>
+          {summary}
+        </div>
+        <div className="ai-gen-actions">
+          {adopt(t("导入到分镜头脚本"))}
+          {regen(t("换一张"))}
         </div>
       </>
     );
@@ -987,9 +1429,15 @@ function ResultCard({
     return (
       <>
         {tf("已生成「{place}」场景参考图：", { place: t(ans.place || "场景") })}
-        <div className="ai-scene-img" style={{ ["--ph" as string]: hue }}>
-          <span>SCENE · {t(ans.place || "AI 匹配")}</span>
-        </div>
+        {imageUrl ? (
+          <div className="ai-scene-img">
+            <img src={imageUrl} alt={t("场景参考图")} {...zoomable} />
+          </div>
+        ) : (
+          <div className="ai-scene-img" style={{ ["--ph" as string]: hue }}>
+            <span>SCENE · {t(ans.place || "AI 匹配")}</span>
+          </div>
+        )}
         <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>
           {summary}
         </div>
@@ -1007,9 +1455,13 @@ function ResultCard({
       <>
         {t("已生成道具参考图：")}
         <div className="ai-gen">
-          <div className="ai-gen-port" style={{ ["--ph" as string]: hue }}>
-            {letter}
-          </div>
+          {imageUrl ? (
+            <img className="ai-gen-port" src={imageUrl} alt={t("道具参考图")} {...zoomable} />
+          ) : (
+            <div className="ai-gen-port" style={{ ["--ph" as string]: hue }}>
+              {letter}
+            </div>
+          )}
           <div className="ai-gen-meta">
             <div className="t">{t("道具")} · {t(ans.ptype || "未指定")}</div>
             <div className="d">{summary}</div>
@@ -1022,28 +1474,28 @@ function ResultCard({
       </>
     );
   }
-  // story
-  const genre = ans.genre || "都市";
-  const lead = ans.lead || "主角";
-  return (
-    <>
-      <strong>{titleFor(genre)}</strong> · {t(genre)}
-      {ans.tone ? " · " + t(ans.tone) : ""} · {t(ans.length || "约 8 秒")}
-      <br />
-      <span className="dim">{summary}</span>
-      <Beats
-        beats={[
-          { n: "01", text: `开场：建立${lead}的处境，${genre}氛围铺陈。` },
-          { n: "02", text: `转折：${ans.conflict || "冲突"}爆发，进入「${ans.plot || "反转"}」的关键一刻。` },
-          { n: "03", text: `收束：${ans.tone || "情绪"}落点，留一个钩子引向下一集。` },
-        ]}
-      />
-      <div className="ai-gen-actions">
-        {adopt(t("写入字段 09 故事内容"))}
-        {regen(t("重写"))}
-      </div>
-    </>
-  );
+  if (flowId === "story") {
+    const genre = ans.genre || "都市";
+    return (
+      <>
+        <strong>{titleFor(genre)}</strong> · {t(genre)}
+        {ans.tone ? " · " + t(ans.tone) : ""} · {t(ans.length || "约 8 秒")}
+        <br />
+        <span className="dim">{summary}</span>
+        {storyText ? (
+          <p style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{storyText}</p>
+        ) : null}
+        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+          {t("已为你生成剧情与分镜，并填入工作台。")}
+        </div>
+        <div className="ai-gen-actions">
+          {adopt(t("写入字段 09 故事内容"))}
+          {regen(t("重写"))}
+        </div>
+      </>
+    );
+  }
+  return null;
 }
 
 function QuickArea({
@@ -1052,13 +1504,6 @@ function QuickArea({
   flowId,
   flowStep,
   flowAns,
-  characters,
-  scenes,
-  props,
-  storyboardOpen,
-  onStartStoryboard,
-  onStoryboardGenerate,
-  onStoryboardCancel,
   onStart,
   onCancel,
   onSelect,
@@ -1076,13 +1521,6 @@ function QuickArea({
   flowId: FlowId | null;
   flowStep: number;
   flowAns: Ans;
-  characters: Character[];
-  scenes: Scene[];
-  props: Prop[];
-  storyboardOpen: boolean;
-  onStartStoryboard: () => void;
-  onStoryboardGenerate: (inp: StoryboardInputs) => void;
-  onStoryboardCancel: () => void;
   onStart: (id: FlowId) => void;
   onCancel: () => void;
   onSelect: (v: string) => void;
@@ -1093,21 +1531,10 @@ function QuickArea({
   onPreset: (i: number) => void;
   onChooseText: (mode: TextMode) => void;
   onBackChoose: () => void;
-  onImport: (name: string, shots: number, chars: number) => void;
+  onImport: (script: string) => void;
 }) {
   const t = useT();
   const tf = useTf();
-  if (storyboardOpen) {
-    return (
-      <StoryboardForm
-        characters={characters}
-        scenes={scenes}
-        props={props}
-        onGenerate={onStoryboardGenerate}
-        onCancel={onStoryboardCancel}
-      />
-    );
-  }
   if (flowId) {
     const def = FLOWS[flowId];
     const step = def.steps[flowStep];
@@ -1165,7 +1592,7 @@ function QuickArea({
           <ActionBtn icon={I.person} bg="var(--layer-shot-soft)" fg="var(--layer-shot)" title={t("生成角色")} sub={t("风格 / 性别 / 身份…")} onClick={() => onStart("character")} />
           <ActionBtn icon={I.scene} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成场景")} sub={t("地点 / 时间 / 氛围")} onClick={() => onStart("scene")} />
           <ActionBtn icon={I.prop} bg="var(--layer-output-soft)" fg="var(--layer-output)" title={t("生成道具")} sub={t("类型 / 材质 / 颜色")} onClick={() => onStart("prop")} />
-          <ActionBtn icon={I.film} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成分镜头脚本")} sub={t("角色 / 场景 / 道具 / 宫格")} onClick={onStartStoryboard} />
+          <ActionBtn icon={I.film} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成分镜图")} sub={t("6/9/12/15 宫格")} onClick={() => onStart("storyboard")} />
         </div>
       </div>
     );
@@ -1202,18 +1629,20 @@ function QuickArea({
       {TEXT_PRESETS.map((p, i) => (
         <button className="ai-preset" key={i} onClick={() => onPreset(i)}>
           <span className="pico">{I.film}</span>
-          {t(p.q)}
+          {p.q}
         </button>
       ))}
     </div>
   );
 }
 
+// 已有剧本上传:粘贴文本或上传 .txt(本地读取)/.doc/.docx(只取文件名,无解析器)。
+// 「解析并填入」走真实大模型(generateAndFill),把整段剧本忠实整理成结构化分镜并填入工程。
 function ScriptUpload({
   onImport,
   onBack,
 }: {
-  onImport: (name: string, shots: number, chars: number) => void;
+  onImport: (script: string) => void;
   onBack: () => void;
 }) {
   const t = useT();
@@ -1226,6 +1655,7 @@ function ScriptUpload({
     const f = e.target.files?.[0];
     if (!f) return;
     setFileName(f.name);
+    // .txt 直接本地读取并填入文本框;.doc/.docx 无解析器,只记录文件名,依赖用户粘贴。
     if (/\.txt$/i.test(f.name)) {
       const reader = new FileReader();
       reader.onload = () => setText(String(reader.result || ""));
@@ -1234,11 +1664,10 @@ function ScriptUpload({
     e.target.value = "";
   };
 
-  const canImport = text.trim().length > 0 || fileName.length > 0;
+  const canImport = text.trim().length > 0;
   const doImport = () => {
     if (!canImport) return;
-    const { shots, chars } = deriveScriptStats(text);
-    onImport(fileName, shots, chars);
+    onImport(text);
     setText("");
     setFileName("");
   };
@@ -1269,135 +1698,6 @@ function ScriptUpload({
       <input ref={fileRef} type="file" accept=".txt,.doc,.docx" hidden onChange={onFile} />
       <button className="btn btn-primary ai-gen-btn" disabled={!canImport} onClick={doImport}>
         {t("解析并填入")}
-      </button>
-    </div>
-  );
-}
-
-function PickRow({
-  label,
-  empty,
-  items,
-  selected,
-  onToggle,
-}: {
-  label: string;
-  empty: string;
-  items: { id: string; name: string }[];
-  selected: string[];
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div className="ai-q">{label}</div>
-      {items.length === 0 ? (
-        <div className="ai-skiphint">{empty}</div>
-      ) : (
-        <div className="chips ai-flow-chips">
-          {items.map((it) => (
-            <div
-              className={"chip" + (selected.includes(it.id) ? " selected global" : "")}
-              key={it.id}
-              onClick={() => onToggle(it.id)}
-            >
-              {it.name}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StoryboardForm({
-  characters,
-  scenes,
-  props,
-  onGenerate,
-  onCancel,
-}: {
-  characters: Character[];
-  scenes: Scene[];
-  props: Prop[];
-  onGenerate: (inp: StoryboardInputs) => void;
-  onCancel: () => void;
-}) {
-  const t = useT();
-  const [charIds, setCharIds] = useState<string[]>([]);
-  const [sceneIds, setSceneIds] = useState<string[]>([]);
-  const [propIds, setPropIds] = useState<string[]>([]);
-  const [grid, setGrid] = useState(9);
-  const [story, setStory] = useState("");
-
-  const toggle = (ids: string[], set: (v: string[]) => void, id: string) =>
-    set(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
-  const namesFrom = (list: { id: string; name: string }[], ids: string[]) =>
-    ids.map((id) => list.find((x) => x.id === id)?.name).filter((n): n is string => !!n);
-
-  const generate = () =>
-    onGenerate({
-      charNames: namesFrom(characters, charIds),
-      sceneNames: namesFrom(scenes, sceneIds),
-      propNames: namesFrom(props, propIds),
-      grid,
-      story,
-    });
-
-  return (
-    <div className="ai-quick">
-      <div className="ai-qlabel">
-        {t("生成分镜头脚本 · 选好素材后一键生成")}
-        <button className="back" onClick={onCancel}>
-          {I.arrow} {t("返回入口")}
-        </button>
-      </div>
-
-      <PickRow
-        label={t("角色 · 选角色库中的角色")}
-        empty={t("角色库暂无角色")}
-        items={characters}
-        selected={charIds}
-        onToggle={(id) => toggle(charIds, setCharIds, id)}
-      />
-      <PickRow
-        label={t("场景 · 选场景库中的场景")}
-        empty={t("场景库暂无场景")}
-        items={scenes}
-        selected={sceneIds}
-        onToggle={(id) => toggle(sceneIds, setSceneIds, id)}
-      />
-      <PickRow
-        label={t("道具 · 选道具库中的道具")}
-        empty={t("道具库暂无道具")}
-        items={props}
-        selected={propIds}
-        onToggle={(id) => toggle(propIds, setPropIds, id)}
-      />
-
-      <div className="ai-q" style={{ marginTop: 8 }}>{t("宫格数量")}</div>
-      <div className="chips ai-flow-chips">
-        {GRID_OPTIONS.map((g) => (
-          <div
-            className={"chip" + (grid === g.count ? " selected global" : "")}
-            key={g.count}
-            onClick={() => setGrid(g.count)}
-          >
-            {t(g.label)}
-          </div>
-        ))}
-      </div>
-
-      <div className="ai-q" style={{ marginTop: 8 }}>{t("故事内容")}</div>
-      <textarea
-        className="input"
-        style={{ minHeight: 80, resize: "vertical", width: "100%" }}
-        placeholder={t("简单描述这段短剧的故事内容…")}
-        value={story}
-        onChange={(e) => setStory(e.target.value)}
-      />
-
-      <button className="btn btn-primary ai-gen-btn" style={{ marginTop: 10 }} onClick={generate}>
-        {t("生成分镜头脚本")}
       </button>
     </div>
   );

@@ -1,5 +1,5 @@
 export type TaskStatus = "queued" | "running" | "success" | "failed";
-export type TaskType = "i2v" | "t2v" | "v2v" | "char";
+export type TaskType = "i2v" | "t2v" | "v2v" | "char" | "ai_image" | "ai_text";
 
 export interface TaskTypeInfo {
   id: TaskType;
@@ -21,6 +21,8 @@ export interface GenerationTask {
   type: TaskTypeInfo;
   platform: string;
   upstream_model: string;
+  /** 上游(Seedance)任务 id;用于关闭弹窗后在使用记录里续轮询回填结果 */
+  upstream_task_id: string | null;
   channel_id: number;
   user: string;
   status: TaskStatus;

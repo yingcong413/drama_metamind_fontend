@@ -4,7 +4,9 @@
 import {
   buildAssetIndex,
   buildPromptText,
+  propRefsOf,
   resolveCharacterImageRef,
+  sceneRefsOf,
 } from "@/lib/naturalLanguage";
 import type { Character, Project } from "@/types";
 
@@ -153,13 +155,15 @@ export function buildSeedancePayload(
       });
     }
   }
-  // 2. 场景图
-  if (idx.scene >= 0 && g.scene_image && g.scene_image.trim()) {
-    content.push({
-      type: "image_url",
-      image_url: { url: g.scene_image },
-      role: "reference_image",
-    });
+  // 2. 多场景图(顺序与 buildAssetIndex 的 sceneRefsOf 一致)
+  for (const r of sceneRefsOf(g)) {
+    if (r.image_url && r.image_url.trim()) {
+      content.push({
+        type: "image_url",
+        image_url: { url: r.image_url },
+        role: "reference_image",
+      });
+    }
   }
   // 3. 站位草图
   if (idx.position >= 0 && g.position_image_url && g.position_image_url.trim()) {
@@ -169,13 +173,15 @@ export function buildSeedancePayload(
       role: "reference_image",
     });
   }
-  // 4. 道具参考图
-  if (idx.prop >= 0 && g.prop_image_url && g.prop_image_url.trim()) {
-    content.push({
-      type: "image_url",
-      image_url: { url: g.prop_image_url },
-      role: "reference_image",
-    });
+  // 4. 多道具参考图(顺序与 buildAssetIndex 的 propRefsOf 一致)
+  for (const r of propRefsOf(g)) {
+    if (r.image_url && r.image_url.trim()) {
+      content.push({
+        type: "image_url",
+        image_url: { url: r.image_url },
+        role: "reference_image",
+      });
+    }
   }
   // 5. 旁白音频
   if (idx.narration >= 0 && g.narration_audio_url && g.narration_audio_url.trim()) {

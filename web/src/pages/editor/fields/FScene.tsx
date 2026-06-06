@@ -12,11 +12,15 @@ interface Props {
   scenes: Scene[];
 }
 
-// 写入 scenes id 数组（多选的真实来源），同时把数组首项的参考图派生进 scene_image
-// —— prompt 流水线仍只读单张 scene_image，保持不变。
+// 写入 scenes id 数组（多选的真实来源），首项派生进 scene_image（向后兼容），
+// 并写入每个选中场景的「名字 + 图」快照 scene_refs，供 prompt 按名分别体现多场景。
 function applySelection(value: GlobalLayer, ids: string[], scenes: Scene[]): GlobalLayer {
   const primary = ids.length ? scenes.find((s) => s.id === ids[0]) : null;
-  return { ...value, scenes: ids, scene_image: primary?.image_url ?? null };
+  const scene_refs = ids
+    .map((id) => scenes.find((s) => s.id === id))
+    .filter((s): s is Scene => !!s)
+    .map((s) => ({ name: s.name, image_url: s.image_url ?? null }));
+  return { ...value, scenes: ids, scene_image: primary?.image_url ?? null, scene_refs };
 }
 
 export function FScene({ value, set, scenes }: Props) {

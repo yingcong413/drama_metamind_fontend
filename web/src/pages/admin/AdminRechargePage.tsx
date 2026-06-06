@@ -11,8 +11,10 @@ import { AppTopBar } from "@/components/layout/AppTopBar";
 import { useIsPlatformAdmin } from "@/stores/auth";
 import {
   createAdminRecharge,
+  listAdminOrgs,
   listAdminRecharges,
   searchOrgs,
+  type AdminOrgItem,
   type AdminRechargeRecord,
   type OrgSearchItem,
 } from "@/api/admin";
@@ -98,6 +100,7 @@ function RechargeBody() {
       setNote("");
       setShowConfirm(false);
       qc.invalidateQueries({ queryKey: ["admin-recharges"] });
+      qc.invalidateQueries({ queryKey: ["admin-orgs"] });
     },
     onError: (e) => {
       alert(tf("充值失败:{msg}", { msg: e instanceof Error ? e.message : String(e) }));
@@ -109,6 +112,30 @@ function RechargeBody() {
     queryKey: ["admin-recharges"],
     queryFn: () => listAdminRecharges(1, 50),
   });
+
+  // ── 所有账户总览(可按类型/状态过滤) ──
+  const [acctType, setAcctType] = useState<"all" | "enterprise" | "personal">("enterprise");
+  const [acctStatus, setAcctStatus] = useState<"all" | "active" | "dissolved">("all");
+  const [acctQ, setAcctQ] = useState("");
+  const orgsQuery = useQuery({
+    queryKey: ["admin-orgs", acctType, acctStatus, acctQ],
+    queryFn: () => listAdminOrgs({ account_type: acctType, status: acctStatus, q: acctQ, page_size: 100 }),
+    staleTime: 2000,
+  });
+
+  // 从账户表里选一个去充值:回填表单顶部的「目标组织」并滚到顶部。
+  const pickOrgToRecharge = (o: AdminOrgItem) => {
+    setSelected({
+      id: o.id,
+      name: o.name,
+      account_type: o.account_type,
+      owner_name: o.owner_name,
+      owner_phone_masked: o.owner_phone_masked,
+      balance_cents: o.balance_cents,
+    });
+    setQ("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <>
@@ -288,6 +315,40 @@ function RechargeBody() {
           )}
         </section>
 
+        {/* 所有账户总览 */}
+        <h2 style={{ marginTop: 32, fontSize: 18 }}>{t("所有账户状态")}</h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+          <div className="segmented">
+            {(["enterprise", "personal", "all"] as const).map((v) => (
+              <button key={v} type="button" className={acctType === v ? "active" : undefined} onClick={() => setAcctType(v)}>
+                {v === "enterprise" ? t("企业账户") : v === "personal" ? t("个人账户") : t("全部类型")}
+              </button>
+            ))}
+          </div>
+          <div className="segmented">
+            {(["all", "active", "dissolved"] as const).map((v) => (
+              <button key={v} type="button" className={acctStatus === v ? "active" : undefined} onClick={() => setAcctStatus(v)}>
+                {v === "all" ? t("全部状态") : v === "active" ? t("正常") : t("已解散")}
+              </button>
+            ))}
+          </div>
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: 180 }}
+            placeholder={t("按公司名 / org_id 过滤…")}
+            value={acctQ}
+            onChange={(e) => setAcctQ(e.target.value)}
+          />
+          <span className="dim-2 mono" style={{ fontSize: 12 }}>
+            {tf("共 {n} 个", { n: orgsQuery.data?.total ?? 0 })}
+          </span>
+        </div>
+        <OrgsTable
+          rows={orgsQuery.data?.list ?? []}
+          loading={orgsQuery.isLoading}
+          onRecharge={pickOrgToRecharge}
+        />
+
         {/* 5. 流水 */}
         <h2 style={{ marginTop: 32, fontSize: 18 }}>{t("最近 50 笔充值流水")}</h2>
         <RechargeTable rows={recordsQuery.data?.list ?? []} loading={recordsQuery.isLoading} />
@@ -422,6 +483,104 @@ function RechargeTable({ rows, loading }: { rows: AdminRechargeRecord[]; loading
               ) : (
                 <span className="dim-2">⋯ {r.status}</span>
               )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function OrgsTable({
+  rows,
+  loading,
+  onRecharge,
+}: {
+  rows: AdminOrgItem[];
+  loading: boolean;
+  onRecharge: (o: AdminOrgItem) => void;
+}) {
+  const t = useT();
+  if (loading) {
+    return <div className="dim" style={{ padding: 24 }}>{t("加载中…")}</div>;
+  }
+  if (rows.length === 0) {
+    return (
+      <div
+        style={{
+          padding: 24, background: "var(--surface-2)", borderRadius: 8,
+          color: "var(--text-tertiary)", fontSize: 13, textAlign: "center",
+        }}
+      >
+        {t("没有匹配的账户")}
+      </div>
+    );
+  }
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <thead>
+        <tr
+          style={{
+            background: "var(--surface-2)", color: "var(--text-secondary)",
+            fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase",
+          }}
+        >
+          <th style={{ padding: 10, textAlign: "left" }}>{t("账户 / 组织")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("类型")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>{t("状态")}</th>
+          <th style={{ padding: 10, textAlign: "left" }}>Owner</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("成员")}</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("余额")}</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("累计充值")}</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("累计消费")}</th>
+          <th style={{ padding: 10, textAlign: "right" }}>{t("操作")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((o) => (
+          <tr key={o.id} style={{ borderTop: "1px solid var(--border)" }}>
+            <td style={{ padding: 10 }}>
+              <div style={{ fontWeight: 500 }}>{o.name}</div>
+              <div className="dim-2 mono" style={{ fontSize: 11 }}>{o.id}</div>
+            </td>
+            <td style={{ padding: 10 }}>
+              {o.account_type === "enterprise" ? t("企业") : t("个人")}
+            </td>
+            <td style={{ padding: 10 }}>
+              {o.status === "active" ? (
+                <span style={{ color: "oklch(70% .15 145)" }}>● {t("正常")}</span>
+              ) : (
+                <span style={{ color: "oklch(72% .15 25)" }}>● {t("已解散")}</span>
+              )}
+            </td>
+            <td style={{ padding: 10 }}>
+              {o.owner_name}
+              <span className="dim-2" style={{ fontSize: 11 }}> {o.owner_phone_masked}</span>
+            </td>
+            <td style={{ padding: 10, textAlign: "right" }} className="mono dim-2">
+              {o.member_count}/{o.seat_limit}
+            </td>
+            <td
+              style={{ padding: 10, textAlign: "right", fontWeight: 600, color: o.balance_cents <= 0 ? "oklch(72% .15 25)" : "var(--accent)" }}
+              className="mono"
+            >
+              ¥{formatYuan(o.balance_cents)}
+            </td>
+            <td style={{ padding: 10, textAlign: "right" }} className="mono dim-2">
+              ¥{formatYuan(o.lifetime_recharged_cents)}
+            </td>
+            <td style={{ padding: 10, textAlign: "right" }} className="mono dim-2">
+              ¥{formatYuan(o.lifetime_spent_cents)}
+            </td>
+            <td style={{ padding: 10, textAlign: "right" }}>
+              <button
+                className="btn btn-sm btn-primary"
+                disabled={o.status === "dissolved"}
+                onClick={() => onRecharge(o)}
+                title={o.status === "dissolved" ? t("已解散，不能充值") : t("给该账户充值")}
+              >
+                {t("充值")}
+              </button>
             </td>
           </tr>
         ))}

@@ -1,6 +1,7 @@
 import { PlusIcon } from "@/components/icons";
 import { useT, useTf } from "@/lib/i18n";
 import { filledShotCount } from "@/lib/validators";
+import { estimateShotSeconds } from "@/lib/shotDuration";
 import type { Project } from "@/types";
 
 interface Props {
@@ -77,7 +78,7 @@ export function ShotTimeline({ project, activeShot, onSelect, onAdd }: Props) {
                 fontWeight: 500,
               }}
             >
-              {filledShotCount(s)}/8 · {(0.6 + i * 0.2).toFixed(1)}s
+              {filledShotCount(s)}/8 · {estimateShotSeconds(s).toFixed(1)}s
             </div>
           </div>
         );

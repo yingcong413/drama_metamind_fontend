@@ -28,6 +28,8 @@ export interface OrgMember {
   status: "active" | "disabled";
   joined_at: string | null;
   last_active_at: string | null;
+  /** 本月额度(分);0 或缺省 = 不限额。Owner 可改。 */
+  monthly_quota_cents?: number;
 }
 
 export interface CreateMemberRequest {

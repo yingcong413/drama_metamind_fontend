@@ -13,6 +13,7 @@ import {
 } from "@/api/seedance";
 import { createTask, patchTask } from "@/api/tasks";
 import { t, useT, useTf } from "@/lib/i18n";
+import { useIsVerificationAccount } from "@/stores/auth";
 import { buildPromptText } from "@/lib/naturalLanguage";
 import { buildPromptSnapshot } from "@/lib/promptSnapshot";
 import { saveGenerationResult } from "@/lib/generationResult";
@@ -32,6 +33,8 @@ type Phase = "preview" | "submitting" | "polling" | "success" | "failed";
 export function GenerateRequestModal({ project, characters, onClose, onConfirm }: Props) {
   const tr = useT();
   const tf = useTf();
+  // 提示词 / JSON 仅「验证账号」可见(秦总需求)
+  const canSeePrompt = useIsVerificationAccount();
   const payload: SeedanceRequest = useMemo(
     () => buildSeedancePayload(project, characters),
     [project, characters],
@@ -228,8 +231,6 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
     onClose();
   };
 
-  const progress = normalizeProgress(info?.progress);
-
   const isPreview = phase === "preview";
 
   return (
@@ -292,6 +293,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
 
         <div style={{ flex: 1, padding: 18, overflow: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
           {isPreview ? (
+            canSeePrompt ? (
             <>
               <div
                 style={{
@@ -328,16 +330,27 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                   tabSize: 2,
                 }}
               />
-              <div className="dim-2 mono" style={{ fontSize: 11 }}>
-                {tr("Prompt 文本与「保存」弹窗共用同一份")} <code>buildPromptText()</code>{tr(",两边永远一致。")}
-              </div>
             </>
+            ) : (
+              <div
+                style={{
+                  flex: 1, display: "grid", placeItems: "center", textAlign: "center",
+                  color: "var(--text-tertiary)", fontSize: 14, padding: 24, gap: 8,
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-secondary)" }}>
+                  {tr("内容已就绪，点「确认生成」即可开始")}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {tr("提示词与 JSON 详情仅「验证账号」可查看。")}
+                </div>
+              </div>
+            )
           ) : (
             <>
               <StatusPanel
                 phase={phase}
                 status={info?.status}
-                progress={progress}
                 error={error}
                 errorCode={errorCode}
                 elapsedSec={elapsedSec}
@@ -365,38 +378,42 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                   />
                 </div>
               )}
-              {/* 本次提交内容(确认生成后仍能回看,排查上游问题用) */}
-              <SubmittedRequestPanel
-                endpoint={getEndpointHint() + "/video/generations"}
-                payloadJson={payloadJson}
-                promptText={promptText}
-                localTaskId={localTaskIdRef.current}
-                upstreamTaskId={taskId}
-                submittedAt={submittedAt}
-                copyToClipboard={copy}
-                copied={copied}
-              />
+              {/* 本次提交内容(含提示词/JSON):仅验证账号可见 */}
+              {canSeePrompt && (
+                <SubmittedRequestPanel
+                  endpoint={getEndpointHint() + "/video/generations"}
+                  payloadJson={payloadJson}
+                  promptText={promptText}
+                  localTaskId={localTaskIdRef.current}
+                  upstreamTaskId={taskId}
+                  submittedAt={submittedAt}
+                  copyToClipboard={copy}
+                  copied={copied}
+                />
+              )}
 
-              <details>
-                <summary className="dim" style={{ cursor: "pointer", fontSize: 12 }}>
-                  {tr("原始响应 / 调试信息")}
-                </summary>
-                <pre
-                  style={{
-                    marginTop: 8,
-                    padding: 12,
-                    fontSize: 11.5,
-                    background: "var(--surface-2)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    maxHeight: 240,
-                    overflow: "auto",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {JSON.stringify(info ?? { error }, null, 2)}
-                </pre>
-              </details>
+              {canSeePrompt && (
+                <details>
+                  <summary className="dim" style={{ cursor: "pointer", fontSize: 12 }}>
+                    {tr("原始响应 / 调试信息")}
+                  </summary>
+                  <pre
+                    style={{
+                      marginTop: 8,
+                      padding: 12,
+                      fontSize: 11.5,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 6,
+                      maxHeight: 240,
+                      overflow: "auto",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {JSON.stringify(info ?? { error }, null, 2)}
+                  </pre>
+                </details>
+              )}
             </>
           )}
         </div>
@@ -410,9 +427,9 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
         >
           <div className="dim-2 mono" style={{ fontSize: 11 }}>
             {isPreview
-              ? tr("校验通过后点「确认生成」走真实接口")
+              ? ""
               : phase === "polling"
-                ? tr("正在轮询任务状态(每 4s)")
+                ? tr("后台生成中 · 可关闭窗口,稍后到「使用记录」查看")
                 : phase === "submitting"
                   ? tr("提交中…")
                   : phase === "success"
@@ -420,7 +437,7 @@ export function GenerateRequestModal({ project, characters, onClose, onConfirm }
                     : tr("失败")}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {isPreview && (
+            {isPreview && canSeePrompt && (
               <button
                 className="btn btn-sm"
                 onClick={() => copy(previewTab === "json" ? payloadJson : promptText)}
@@ -701,14 +718,12 @@ function translateStatus(s: string | undefined): string {
 function StatusPanel({
   phase,
   status,
-  progress,
   error,
   errorCode,
   elapsedSec = 0,
 }: {
   phase: Phase;
   status?: string;
-  progress: number;
   error: string | null;
   errorCode?: string | null;
   elapsedSec?: number;
@@ -742,33 +757,27 @@ function StatusPanel({
           }}
         />
         <span style={{ fontWeight: 600 }}>{label}</span>
-        <span className="dim-2 mono" style={{ fontSize: 12 }}>{progress}%</span>
-      </div>
-      <div
-        style={{
-          height: 6, borderRadius: 999,
-          background: "var(--surface-2)", overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%", width: `${progress}%`,
-            background: ok ? "#3dd76a" : bad ? "#ff5d5d" : "var(--accent, #6aa0ff)",
-            transition: "width .3s ease",
-          }}
-        />
       </div>
 
-      {/* 进行中:显示已等待 + 长等待友好提示 */}
-      {(phase === "submitting" || phase === "polling") && elapsedSec > 0 && (
-        <div className="dim-2" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.6 }}>
-          {tr("已等待")} <span className="mono" style={{ color: "var(--text)" }}>{formatElapsed(elapsedSec)}</span>
-          {progress === 0 && elapsedSec > 10 && (
-            <span>
-              {" · "}
-              {phase === "submitting"
-                ? tr("如果一直停在这里超过 60 秒,可能是上游繁忙或多人同时使用,我们会自动超时并提示")
-                : tr("上游 GPU 排队中,通常需要 1-3 分钟。多人同时使用会更久")}
+      {/* R5:去进度条 —— 提交后任务转入后台运行,提示用户可关闭弹窗,稍后到「使用记录」查看结果 */}
+      {(phase === "submitting" || phase === "polling") && (
+        <div
+          style={{
+            marginTop: 4, padding: "12px 14px",
+            background: "rgba(106,160,255,.10)",
+            border: "1px solid rgba(106,160,255,.32)",
+            borderRadius: 8,
+            fontSize: 13, lineHeight: 1.7,
+            color: "var(--text-secondary)",
+          }}
+        >
+          <div style={{ fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
+            {tr("任务已转入后台运行")}
+          </div>
+          {tr("视频正在后台生成,你可以直接关闭此窗口去做别的事。生成完成后,可在「使用记录」中查看并下载结果。")}
+          {elapsedSec > 0 && (
+            <span className="dim-2">
+              {" · "}{tr("已等待")} <span className="mono" style={{ color: "var(--text)" }}>{formatElapsed(elapsedSec)}</span>
             </span>
           )}
         </div>

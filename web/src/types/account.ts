@@ -6,6 +6,8 @@ export interface Account {
     spent_cents: number;
     generated_count: number;
     duration_seconds: number;
+    /** 上月消费(分),用于「较上月」环比;旧后端可能不返回 */
+    prev_month_spent_cents?: number;
   };
   last_recharge: {
     amount_cents: number;
@@ -28,7 +30,7 @@ export interface RechargePackage {
   per_unit_cents: number;
 }
 
-export type RechargeMethod = "wechat" | "alipay" | "bank";
+export type RechargeMethod = "wechat" | "alipay" | "stripe" | "bank";
 export type RechargeStatus = "pending" | "success" | "failed" | "expired";
 
 export interface RechargeRecord {

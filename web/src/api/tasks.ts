@@ -55,7 +55,7 @@ export function getTask(id: string): Promise<GenerationTask> {
 
 export interface CreateTaskRequest {
   project_id?: string | null;
-  type_id?: "i2v" | "t2v" | "v2v" | "char";
+  type_id?: "i2v" | "t2v" | "v2v" | "char" | "ai_image" | "ai_text";
   platform?: string;
   upstream_model?: string;
   channel_id?: number;
@@ -75,6 +75,7 @@ export function createTask(input: CreateTaskRequest): Promise<GenerationTask> {
       type: { id: input.type_id ?? "i2v", label: "图生视频", hue: 250 },
       platform: input.platform ?? "Seedance",
       upstream_model: input.upstream_model ?? "",
+      upstream_task_id: input.upstream_task_id ?? null,
       channel_id: input.channel_id ?? 0,
       user: "你",
       status: "queued",

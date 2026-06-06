@@ -53,10 +53,25 @@ export interface GlobalLayer {
    * 数组第一项为「主道具」，其参考图会被解析进 prop_image_url 供 prompt 使用。
    */
   props: string[];
+  /**
+   * 选中场景的「名字 + 参考图」快照（FScene 选择时回写，顺序同 scenes）。
+   * prompt 流水线据此把每个场景按名字 + 图分别体现（多场景，不再只用第一张当背景）。
+   */
+  scene_refs?: Array<{ name: string; image_url: string | null }>;
+  /**
+   * 选中道具的「名字 + 参考图」快照（FProp 选择时回写，顺序同 props）。
+   * prompt 流水线据此把每个道具按「道具名 + 图」分别体现（多道具）。
+   */
+  prop_refs?: Array<{ name: string; image_url: string | null }>;
   // 单场景设计:整支视频只支持一张场景参考图。
   // 由 scenes[0] 对应场景的参考图派生而来（FScene 选择时回写），prompt 直接读它。
   // 字符串可以是外链 URL,也可以是 base64 data URL(本地上传)。
   scene_image: string | null;
+  /**
+   * 「想象力约束强度」0–100(秦总需求):越高,prompt 末尾对模型自由发挥的约束措辞越强,
+   * 越严格地只呈现描述内容。未设按默认 70。
+   */
+  constraint_strength?: number;
   position_image_url: string | null;
   /**
    * 道具参考图(可选):单张展示本片关键道具的简笔/实拍图,模型据此约束道具外观一致性。
@@ -114,6 +129,8 @@ export interface Shot {
   name: string;
   /** 分镜描述:这一镜整体在讲什么(自由文本,拼进 prompt 的镜头段开头) */
   description: string;
+  /** 分镜参考图:分镜头脚本宫格图裁切后第 k 格对应本分镜(TOS URL);未设为空 */
+  ref_image_url?: string | null;
   order: number;
   shot_size: string | null;
   duration_seconds: number | null;

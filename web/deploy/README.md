@@ -31,8 +31,35 @@ bash deploy/pack.sh
 ```
 
 会自动:
-1. `npm run build:preview` 生成 `dist/`
+1. `npm run build`(production 模式,默认)生成 `dist/`;`PACK_MODE=preview` 才用 `build:preview`
 2. 把 `dist/` + nginx 配置 + deploy.sh + 本 README 打包成 `web/deploy/metamind-deploy.tar.gz`
+
+---
+
+## ⚠ 前端凭据是「构建期」变量 —— 必须放 `web/.env.local`,不是后端 `.env`
+
+**最容易踩的坑**:所有 `VITE_*` 变量(`VITE_TOS_AK` / `VITE_TOS_SK` / `VITE_SEEGEN_API_KEY` / `VITE_METAMIND_API_KEY` / `VITE_ASSET_LIB_PROVIDER` 等)都是**前端构建期**变量 —— Vite 在 `npm run build` 时把它们的值**编译进前端 bundle**。
+
+- ✅ 要放在**执行构建那台机器**的 `web/.env.local`(已 gitignore,不入仓库),或 `web/.env.production`(非密钥项)。
+- ❌ 放到后端 `/opt/metamind-server/.env` **完全无效** —— 那是 Node 服务器**运行期**读的,跟已经打包好的前端静态 JS 没有任何关系。
+- 典型症状:上传素材报「**TOS 凭据未配置:请在 web/.env.local 设置 VITE_TOS_AK / VITE_TOS_SK**」,就是构建时没注入这两个值。
+
+**正确做法**(构建机 `web/` 目录):
+
+```bash
+cat > web/.env.local <<'EOF'
+VITE_TOS_AK=你的火山AK
+VITE_TOS_SK=你的火山SK
+VITE_METAMIND_API_KEY=你的AI密钥
+EOF
+npm run build   # 这一步才会把上面的值打进 bundle
+```
+
+> 改了 `.env.local` **必须重新 `npm run build` 并重新部署** dist,旧 bundle 不会自动更新。
+>
+> 后端的 `server/.env`(`/opt/metamind-server/.env`)只放**后端运行期**变量:`JWT_SECRET` / `VOLCANO_*` / `ALIYUN_*` / OAuth / `BILLING_*` / `ALIPAY_*` / `WECHAT_PAY_*` 等。两套 env 各管各的,别混。
+>
+> 想彻底不在前端放密钥,可改走「后端代签」(复用后端 `VOLCANO_*`),届时前端就不需要 `VITE_TOS_*` 了。
 
 ---
 

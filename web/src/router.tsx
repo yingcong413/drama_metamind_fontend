@@ -10,6 +10,8 @@ import { AccountPage } from "@/pages/account/AccountPage";
 import { OrgPage } from "@/pages/org/OrgPage";
 import { AdminRechargePage } from "@/pages/admin/AdminRechargePage";
 import { AdminCreateOrgPage } from "@/pages/admin/AdminCreateOrgPage";
+import { AdminProjectsPage } from "@/pages/admin/AdminProjectsPage";
+import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
 import { LoginPage } from "@/pages/login/LoginPage";
 import { useAuthStore } from "@/stores/auth";
 
@@ -40,6 +42,10 @@ export const router = createBrowserRouter([
   { path: "/admin/recharge",         element: <RequireAuth><AdminRechargePage /></RequireAuth> },
   // v0.9.5: 平台管理员替客户开企业账户
   { path: "/admin/create-org",       element: <RequireAuth><AdminCreateOrgPage /></RequireAuth> },
+  // v0.9.23: 平台管理员查看全平台项目并导入复现
+  { path: "/admin/projects",         element: <RequireAuth><AdminProjectsPage /></RequireAuth> },
+  // v0.9.27: 平台管理员管理所有账号(验证账号 / 额度)
+  { path: "/admin/users",            element: <RequireAuth><AdminUsersPage /></RequireAuth> },
   { path: "/login",                  element: <LoginPage /> },
   { path: "*",                       element: <Navigate to="/dashboard" replace /> },
 ]);

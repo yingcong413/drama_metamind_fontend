@@ -4,13 +4,18 @@
 
 import { USE_REAL_AUTH, get, post } from "./client";
 
-export type PayMethod = "alipay" | "wechat_pay";
+export type PayMethod = "alipay" | "wechat_pay" | "stripe";
 
 export interface CreateOrderResp {
   recharge_id: string;
   out_trade_no: string;
   method: PayMethod;
+  /** 计入余额的人民币分 */
   amount_cents: number;
+  /** stripe 时为美元分(向账户收的金额),否则 null */
+  usd_cents: number | null;
+  /** stripe 时为 1 USD = ? CNY 实时汇率,否则 null */
+  rate: number | null;
   qr_code: string | null;
   pay_url: string | null;
   is_stub: boolean;

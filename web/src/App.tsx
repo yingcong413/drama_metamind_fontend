@@ -8,6 +8,7 @@ import { isRTL, t } from "@/lib/i18n";
 import { useAuthStore } from "@/stores/auth";
 import { USE_MOCK, USE_REAL_AUTH } from "@/api/client";
 import { loginPhone } from "@/api/auth";
+import { migrateLocalDataIfNeeded } from "@/lib/migrateLocalToBackend";
 import { Lightbox } from "@/components/primitives/Lightbox";
 
 const queryClient = new QueryClient({
@@ -41,6 +42,19 @@ export function App() {
     document.documentElement.setAttribute("lang", lang);
     document.documentElement.setAttribute("dir", isRTL(lang) ? "rtl" : "ltr");
   }, [lang]);
+
+  // 真后端 + 已登录:一次性把老客户的本地 mock 数据(角色/项目/场景/道具)迁到后端,
+  // 避免切后端后老数据看起来「丢了」。非破坏(只复制不删本地)、幂等(带标志位)。
+  // 迁移完刷新相关列表查询,数据立刻出现,无需手动刷新。
+  useEffect(() => {
+    if (!token) return;
+    void migrateLocalDataIfNeeded().then(() => {
+      queryClient.invalidateQueries({ queryKey: ["characters"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["scenes"] });
+      queryClient.invalidateQueries({ queryKey: ["props"] });
+    });
+  }, [token]);
 
   useEffect(() => {
     let cancelled = false;

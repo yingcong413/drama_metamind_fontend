@@ -7,6 +7,7 @@ import { ZoomButton } from "@/components/primitives/ZoomableImage";
 import { cn } from "@/lib/cn";
 import { isLoadableUrl } from "@/lib/format";
 import { useT, useTf } from "@/lib/i18n";
+import { useIsOwner } from "@/stores/auth";
 import { MediaLibraryDrawer } from "./MediaLibraryDrawer";
 import type { MediaItem, MediaUpsert } from "./types";
 
@@ -37,6 +38,8 @@ export function MediaLibrary({ config }: Props) {
   const t = useT();
   const tf = useTf();
   const qc = useQueryClient();
+  // R9 库权限:仅母账号(Owner)可新建 / 编辑 / 删除素材库;子账号(Member)只读 + 引用。
+  const isOwner = useIsOwner();
   const { data: items = [], isLoading } = useQuery({
     queryKey: [config.queryKey],
     queryFn: config.list,
@@ -79,9 +82,11 @@ export function MediaLibrary({ config }: Props) {
       <AppTopBar
         crumbs={[{ label: t(config.pageTitle) }]}
         actions={
-          <button className="btn-primary btn btn-sm" onClick={() => setCreating(true)}>
-            <PlusIcon /> {t(config.createLabel)}
-          </button>
+          isOwner ? (
+            <button className="btn-primary btn btn-sm" onClick={() => setCreating(true)}>
+              <PlusIcon /> {t(config.createLabel)}
+            </button>
+          ) : undefined
         }
       />
       <div className="char-lib" data-screen-label={config.enLabel}>
@@ -124,6 +129,17 @@ export function MediaLibrary({ config }: Props) {
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
+          {!isOwner && (
+            <span
+              className="dim-2"
+              style={{
+                fontSize: 12, padding: "4px 10px", borderRadius: 6,
+                background: "var(--surface-2)", border: "1px solid var(--border)",
+              }}
+            >
+              {t("素材库由母账号统一管理，你可在工作台中引用，但无法新建或删除。")}
+            </span>
+          )}
         </div>
 
         {isLoading ? (
@@ -134,17 +150,20 @@ export function MediaLibrary({ config }: Props) {
               <MediaTile
                 key={s.id}
                 item={s}
+                canManage={isOwner}
                 onEdit={() => setEditing(s)}
                 onDelete={() => onDelete(s)}
               />
             ))}
-            <div className="char-tile-add" onClick={() => setCreating(true)}>
-              <div className="add-glyph">+</div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{t(config.createLabel)}</div>
-              <div className="dim-2 mono" style={{ fontSize: 10, marginTop: 4 }}>
-                {t("名字 / 参考图")}
+            {isOwner && (
+              <div className="char-tile-add" onClick={() => setCreating(true)}>
+                <div className="add-glyph">+</div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{t(config.createLabel)}</div>
+                <div className="dim-2 mono" style={{ fontSize: 10, marginTop: 4 }}>
+                  {t("名字 / 参考图")}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -163,17 +182,19 @@ export function MediaLibrary({ config }: Props) {
 
 function MediaTile({
   item,
+  canManage,
   onEdit,
   onDelete,
 }: {
   item: MediaItem;
+  canManage: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const t = useT();
   const canRender = !!item.image_url && isLoadableUrl(item.image_url);
   return (
-    <article className="char-tile" onClick={onEdit}>
+    <article className="char-tile" onClick={canManage ? onEdit : undefined} style={canManage ? undefined : { cursor: "default" }}>
       <div className="char-tile-portrait">
         {canRender ? (
           <img
@@ -194,27 +215,33 @@ function MediaTile({
         <div className="char-tile-name-row">
           <span className="char-tile-name">{item.name}</span>
         </div>
-        <div className="char-tile-actions">
-          <button
-            className="btn btn-sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-          >
-            <EditIcon /> {t("编辑")}
-          </button>
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            title={t("删除")}
-          >
-            <TrashIcon />
-          </button>
-        </div>
+        {canManage ? (
+          <div className="char-tile-actions">
+            <button
+              className="btn btn-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+            >
+              <EditIcon /> {t("编辑")}
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title={t("删除")}
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        ) : (
+          <div className="char-tile-actions">
+            <span className="dim-2" style={{ fontSize: 11 }}>{t("仅可引用")}</span>
+          </div>
+        )}
       </div>
     </article>
   );

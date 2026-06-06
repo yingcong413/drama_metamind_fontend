@@ -7,6 +7,7 @@ import { exportTasksCsv, getTaskStats, listTasks } from "@/api/tasks";
 import { useIsOwner, useAccountType } from "@/stores/auth";
 import { cn } from "@/lib/cn";
 import { useT, useTf } from "@/lib/i18n";
+import { useResumePendingTasks } from "@/lib/useResumePendingTasks";
 import type { GenerationTask } from "@/types";
 import { AccountInfoCard } from "./AccountInfoCard";
 import { BalanceHero } from "./BalanceHero";
@@ -67,6 +68,8 @@ export function AccountPage() {
     queryFn: () => listTasks({ scope: filters.scope, page_size: 200 }),
     select: (r) => r.total,
   });
+  // 关掉生成弹窗后仍在跑的视频任务,在使用记录里续轮询回填结果(否则一直停在 running、看不到视频)
+  useResumePendingTasks(tasksQuery.data?.list ?? []);
   // 全公司汇总(仅 Owner + 全公司 tab 才拉)
   const statsQuery = useQuery({
     queryKey: ["task-stats", filters.date_from, filters.date_to],

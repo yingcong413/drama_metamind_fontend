@@ -6,7 +6,7 @@ import type { GlobalLayer } from "@/types";
 interface Props {
   value: GlobalLayer;
   set: (g: GlobalLayer) => void;
-  onAutoGenShots?: () => void;
+  onAutoGenShots?: () => void | Promise<void>;
 }
 
 export function FStory({ value, set, onAutoGenShots }: Props) {
@@ -14,7 +14,17 @@ export function FStory({ value, set, onAutoGenShots }: Props) {
   const tf = useTf();
   const len = (value.story || "").length;
   const [showEx, setShowEx] = useState(false);
+  const [genLoading, setGenLoading] = useState(false);
   const hasStory = !!value.story?.trim();
+  const runAutoGen = async () => {
+    if (!onAutoGenShots || genLoading) return;
+    setGenLoading(true);
+    try {
+      await onAutoGenShots();
+    } finally {
+      setGenLoading(false);
+    }
+  };
   return (
     <div>
       <textarea
@@ -27,11 +37,11 @@ export function FStory({ value, set, onAutoGenShots }: Props) {
         <div style={{ marginTop: 10 }}>
           <button
             className="btn btn-sm"
-            disabled={!hasStory}
-            title={hasStory ? t("根据故事内容自动拆解出多个分镜") : t("请先填写故事内容")}
-            onClick={onAutoGenShots}
+            disabled={!hasStory || genLoading}
+            title={hasStory ? t("调用文字模型，根据故事内容自动拆解并填好多个分镜") : t("请先填写故事内容")}
+            onClick={runAutoGen}
           >
-            <SparkleIcon /> {t("自动生成分镜头")}
+            <SparkleIcon /> {genLoading ? t("正在生成分镜…") : t("自动生成分镜头")}
           </button>
         </div>
       )}
