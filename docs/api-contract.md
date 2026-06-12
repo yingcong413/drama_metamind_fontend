@@ -1,4 +1,4 @@
-# 制影 AI · 短剧工坊 — 前后端接口契约 v0.6
+# 制影 AI · 短剧工坊 — 前后端接口契约 v0.7
 
 > 本文档基于 Claude Design 输出的 UI 原型（`metamind_duanju-handoff.zip`）梳理而来，覆盖原型中全部交互点。
 > 前端：React + TypeScript。后端：Go。AI 视频生成调用「new API（ApiGo VIP）」平台模型，由后端代理，前端只与本服务交互。
@@ -512,6 +512,86 @@ type Scene struct {
 
 ---
 
+
+### 2.6 工作流画布 Workflow / 3D 导演台 Director（★v0.7 新增）
+
+「工作流」是项目编辑器的默认模式：无限画布上的节点 + 连线。**当前完全存前端 localStorage（key `mm-wf-<projectId>`，值为下方 `WorkflowDoc` 的 JSON）**，后端落库时按整包 JSON 读写即可（见 §3.10），前端不需要逐字段的列式存储。
+
+```typescript
+// front: src/pages/editor/WorkflowCanvas.tsx（当前即 localStorage 结构）
+export interface WorkflowDoc {
+  nodes: WfNode[];
+  edges: WfEdge[];                    // { id: "fromId->toId", from, to }
+}
+
+export type NodeKind = "text" | "image" | "video" | "audio" | "agent" | "script" | "director";
+
+export interface WfNode {
+  id: string;                          // 前端生成的短随机串(落库后可换后端 id,前端只要求字符串唯一)
+  kind: NodeKind;
+  x: number; y: number;                // 画布世界坐标
+  title: string;
+  content: string;                     // 文本/脚本类节点的正文
+  url: string | null;                  // 图片/视频/音频节点的素材地址 ⚠️ 当前为 dataURL,见下方「资产策略」
+  gen?: WfGen;                         // 节点生成器参数(提示词/模型/比例/参考槽等,纯前端编辑态,原样存)
+  generated?: boolean;                 // 由「剧本分镜头」自动生成的节点
+  director?: DirectorSave;             // ★ kind === "director" 时的 3D 场景存档
+}
+```
+
+#### 2.6.1 导演台 DirectorSave（3D 站位 / 机位 / 姿势编排）
+
+导演台节点点开是全屏 Three.js 工作台；它的全部场景状态序列化为 `DirectorSave` 挂在节点上随 Workflow 一起持久化。**后端不需要理解 3D 语义，原样存取 JSON 即可**；唯一需要处理的是其中的图片资产（见资产策略）。
+
+```typescript
+// front: src/pages/editor/DirectorConsole.tsx
+type Vec3 = [number, number, number];
+type BodyType = "male" | "female" | "broad" | "muscle" | "slim" | "teen" | "child" | "chibi"; // 8 种素体
+type ModelShape = "box" | "sphere" | "cylinder" | "torus" | "cone" | "pyramid"
+                | "plane" | "backdrop" | "glb";   // plane 为旧版平铺图(打开时自动迁移为 backdrop)
+
+export interface DirectorSave {
+  v: 1;                                // 存档结构版本号
+  chars: DcChar[];                     // 角色(素体)
+  models: DcModel[];                   // 几何体 / 场景图布景 / GLB 模型
+  cams: DcCam[];                       // 机位
+  shots: DcShot[];                     // 相机截图
+  refs: DcRef[];                       // 站位参考/场景图上传历史
+  ratio: string;                       // 画幅: "Auto" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16"
+}
+
+export interface DcChar {
+  kind: "char"; id: string; name: string;
+  body: BodyType; color: string;       // 颜色 #RRGGBB(每种素体有默认配色)
+  pos: Vec3; rot: Vec3; scale: Vec3;   // rot 单位:度
+  pose: Record<string, number>;        // 姿势参数(角度,度):25 个关节滑杆 + 隐藏 drop(米,坐/蹲/跪下沉)
+                                       // key 形如 bodyBend/torsoTwist/headNod/armLRaise/elbowLBend/legRSpread/kneeLBend…
+  preset?: string;                     // 当前命中的姿势预设名(站立/T型/行走…共 20 个),滑杆微调后清空
+}
+export interface DcModel {
+  kind: "model"; id: string; name: string;
+  shape: ModelShape; color: string;
+  pos: Vec3; rot: Vec3; scale: Vec3;
+  url?: string;                        // shape 为 backdrop/plane/glb 时的素材地址 ⚠️ 当前为 dataURL
+}
+export interface DcCam {
+  kind: "cam"; id: string; name: string;   // 机位1、机位2…
+  pos: Vec3; target: Vec3;             // 注视坐标
+  fov: number;                         // 20–120
+  look: string;                        // "manual" 或某个 DcChar.id(注视目标跟随角色)
+}
+export interface DcShot { id: string; name: string; url: string; camId: string }  // 截图,url ⚠️ dataURL(jpeg 640w q0.78)
+export interface DcRef  { id: string; name: string; url: string }                  // 上传历史,url ⚠️ dataURL
+```
+
+#### 2.6.2 资产策略（后端必读）
+
+- 上面标 ⚠️ 的 `url` 字段(节点素材、导演台截图 `shots[].url`、上传历史 `refs[].url`、布景 `models[].url`)在 mock 模式下是 **base64 dataURL**。接后端后的口径:**前端先调 `POST /uploads/image` 换成 TOS 公网 URL 再写入 Workflow JSON**,后端对 Workflow 整包只存不解析。建议后端对整包做尺寸上限校验(建议 ≤ 2MB,超限返回 42201 提示前端清理截图)。
+- 「截图导出到画布」会把 `DcShot.url` 复制到新建 image 节点的 `url` 并自动连线 —— 同一资产 URL 被两处引用,删除策略以 URL 不回收为前提(TOS 生命周期管理,不做引用计数)。
+- **GLB 素体模型**(8 种体型的高模)是前端静态资源 `web/public/models/body-*.glb`,随前端部署分发,后端无需提供接口。当前线上开关关闭(全部用程序化素体),骨骼姿势重定向调通后启用。
+
+---
+
 ## 3. 接口清单
 
 > 列已实现的状态：⬜ 待实现 / 🟦 mock / ✅ 已上线
@@ -534,6 +614,8 @@ type Scene struct {
 | P2 | `/prompt/preview` / `/prompt/polish` | 右侧预览面板暂未实现 |
 | P2 | `GET /meta/options` | 前端目前硬编码在 `src/lib/fieldDefs.ts`,等后端就绪再切 |
 | P2 | `GET /auth/me` / `POST /auth/logout` / `POST /auth/wechat` | 前端未调,登录后只信 localStorage token |
+| **P1** | `GET /projects/:id/workflow` / `PUT /projects/:id/workflow`(★v0.7) | 工作流画布整包存取,当前全存 localStorage `mm-wf-<pid>`,`src/pages/editor/WorkflowCanvas.tsx` |
+| P2 | `POST /director/layout-parse`(★v0.7) | 导演台「AI生成站位参考」识图,当前本地 mock(仅插入布景) |
 
 P0 全做完就能联调跑起来 6 个页面。
 
@@ -888,6 +970,40 @@ Query：
 
 ---
 
+### 3.10 工作流画布 / 导演台（★v0.7 新增）
+
+> 当前状态:🟦 全部 mock(localStorage)。结构见 §2.6。
+
+#### GET `/projects/:id/workflow`
+读取项目的工作流整包。从未保存过返回 `data: { nodes: [], edges: [], updated_at: null }`(不要 404)。
+
+```json
+{ "code": 0, "data": { "nodes": [/* WfNode[] */], "edges": [/* WfEdge[] */], "updated_at": "2026-06-12T12:00:00Z", "version": 7 } }
+```
+
+#### PUT `/projects/:id/workflow`
+整包覆盖保存。前端在画布变更后 **防抖 ≈1s** 调用(导演台内部变更同样汇入)。
+
+- 入参:`{ nodes, edges, version }`。`version` 为上次读到的版本号,后端做乐观锁:不一致返回 `40901`,前端提示"已在其他窗口修改,刷新后重试"。
+- 出参:`{ updated_at, version }`(版本 +1)。
+- 校验:JSON 总大小 ≤ 2MB(超限 `42201`,`errors[].field = "workflow"`);`nodes[].kind` 仅接受 §2.6 枚举;其余字段透传不校验。
+
+#### POST `/director/layout-parse`（P2,识图生成站位）
+「生成站位参考」弹窗的 AI 路径:上传一张场景/站位图,后端识别画面中的人物与场景,返回可直接并入 `DirectorSave` 的结构。**当前前端为本地 mock(只把图片立为 backdrop 布景,不生成角色),接口就绪后切换。**
+
+```json
+// 入参
+{ "image_url": "https://tos.../layout.png", "mode": "insert" }   // mode: insert(保留现有) | cover(覆盖)
+// 出参
+{ "code": 0, "data": {
+    "chars": [ { "name": "人物1", "body": "male", "pos": [0.6, 0, -0.4], "rot": [0, 35, 0] } ],
+    "backdrop": { "name": "场景图", "url": "https://tos.../layout.png", "scale": [8, 4.5, 1] }
+} }
+```
+识别失败返回 `50301`(上游模型不可用)或 `42201`(图片无法识别),前端降级为仅插入布景。
+
+---
+
 ## 4. 页面 ⇄ 接口映射
 
 > 用于前后端联调时一行一行对照检查。
@@ -933,6 +1049,11 @@ Query：
 | **编辑器** 顶栏模式切换 常规/首尾帧/智能多帧（★v0.6） | 纯前端状态(`metamind-genmode` localStorage)，不调接口                  |
 | **编辑器** 首尾帧/智能多帧「生成视频」（★v0.6） | 复用 `POST /projects/:id/generations`（管线消费 frame_* 字段待对齐）   |
 | **编辑器** 首尾帧/智能多帧下方「生成记录」（★v0.6） | `GET /tasks?...`（同使用记录）；点击行 `GET /tasks/:id` 看视频/提示词  |
+| **工作流画布** 加载 / 任意编辑（★v0.7）  | `GET /projects/:id/workflow`；变更防抖 1s `PUT /projects/:id/workflow`（当前 localStorage） |
+| **工作流画布** 输入框 @ 提及素材（★v0.7） | 复用 `GET /characters` / `/scenes` / `/props` + 画布内节点，无新接口                  |
+| **导演台** 打开 / 摆位 / 姿势 / 机位（★v0.7） | 纯前端 Three.js；状态挂在 director 节点随 workflow 一起 PUT                      |
+| **导演台** 截图 / 导出到画布（★v0.7）     | 截图本地渲染；图片走 `POST /uploads/image` 换 URL 后写入 workflow（当前 dataURL） |
+| **导演台** 「生成站位参考」AI 识图（★v0.7） | `POST /uploads/image` → `POST /director/layout-parse`（当前本地 mock，仅插入布景） |
 
 ---
 
@@ -955,6 +1076,9 @@ Query：
 10. **AI 润色** 调用 new API 哪个模型？建议默认 `claude-opus-4-7`，可配置。
 14. **后端消息本地化（i18n）**：`message` / `data.errors[].msg` 当前是中文，非中文用户看到中文报错。建议二选一：① 后端只返回稳定的 `code`（含 422 的 `field` + 机器可读 `reason` 码），由前端映射各语言文案；② 后端按请求头 `Accept-Language` 返回对应语言文案。倾向方案①（前端已有翻译表基建）。
 15. **语言偏好是否落后端**：当前仅存浏览器 localStorage（`metamind-lang`），换设备 / 清缓存即丢。是否需要写入 account（`/auth/me`、`/account` 返回 `lang`，登录后端点更新），以便多端同步、并供后端按语言发通知 / 发票。
+16. **工作流整包 vs 增量**（★v0.7）：v0.7 先按整包 PUT + 乐观锁版本号落地；若后续画布变大（截图多），是否引入 node 级增量 PATCH 与服务端合并？建议先观察整包体积再决定。
+17. **导演台图片资产口径**（★v0.7）：截图当前前端压到 640w jpeg(q0.78)、单张约 30–80KB；站位参考/场景图为用户原图。是否在 `/uploads/image` 增加 `purpose=director_shot|director_ref` 以便分桶与生命周期管理（截图可设 30 天过期）。
+18. **AI 站位识别管线**（★v0.7）：`/director/layout-parse` 用哪个视觉模型、延迟预算（前端弹窗提示"关闭不会中断识图任务"，即允许异步：可改为任务化 `task_id` + 轮询，与生成任务复用 §3.5 机制？）。
 
 ---
 
@@ -968,3 +1092,4 @@ Query：
 | v0.5   | 2026-06-01   | 新增 §1.6 国际化：前端支持 6 语言（zh-CN/zh-TW/en/fr/es/ar，ar 为 RTL），纯前端展示层翻译、语言偏好仅存 localStorage。明确约束：① `/meta/options` 枚举、`Character.role/tags`、`camera` 的 速度/幅度/方向、项目/分镜默认名等**保持中文 canonical 值且需稳定**（同时是翻译表 key），后端不本地化；② 后端 `message`/`errors[].msg` 仍为中文，前端无法本地化任意串。§5 新增待对齐项 14（后端消息本地化策略）、15（语言偏好是否落后端）。纯 CSS/交互改动不影响契约。 |
 | v0.6   | 2026-06-03   | 本期新模块整体同步：① **场景库 / 道具库**（新增 `Scene`/`Prop` 轻量模型 §2.5 + `/scenes`·`/props` CRUD §3.9，扁平数组；名字+参考图均必填）；② **角色变体** `Character.has_variants`/`variants`（`CharacterVariant`：名字/描述/主图/多角度图/声线），项目侧 `GlobalLayer.character_variants`（角色id→变体id）选择调用哪个变体；③ **分镜头脚本图** `GlobalLayer.storyboard_image_url`（宫格图，可手动上传或大模型生成后导入，仅留存不进 prompt）；④ **首尾帧 / 智能多帧** 模式：`GlobalLayer.frame_prompt`/`first_frame_url`/`last_frame_url`/`multi_frame_urls`/`multi_frame_segments`(`FrameSegment`{seconds,desc})/`frame_ratio`/`frame_resolution`（**当前仅前端留存，未接生成管线**）；⑤ **分辨率新增 `480p`**（`GlobalLayer.resolution` / `GenerationTask.resolution` / CreateTaskInput / `/meta/options.resolutions`）；⑥ `OutputLayer` 补 `generate_audio`；⑦ §2.2 `GlobalLayer` 整块对齐当前代码（场景/道具改为「库 id 数组 + 派生单图」`scenes`/`props`/`scene_image`/`prop_image_url`，新增 `ratio`/`resolution`/`image_quality`）。⚠️ 变体素材/首尾帧·多帧画面均为轻量 URL，尚未接入 Seedance 素材引用与生成管线，消费方案待后端对齐。i18n 仅前端补词典，不影响契约。 |
 | v0.4   | 2026-05-18   | 按编辑器最新改动整体对齐:① 移除时间模块(`GlobalLayer.season/time_of_day` 删除,`/meta/options` 去掉 `seasons/time_of_day`);② `GlobalLayer` 新增 `total_duration_seconds`(视频总时长,必填);③ `Shot` 新增 `shot_size`(景别,单选,见 §2.2.1)、`duration_seconds`(分镜时长,选填)、`action_strength/micro_strength/gesture_strength`(强度 0-100,默认 65);④ `global.style`、`shot.camera` 改为**单选**(数组长度 ≤ 1);⑤ 场景/站位图均为**单图**;⑥ 字段编号整体重排:全局 01-10、分镜 11-20(另有分镜步骤 00 出场角色);⑦ `/meta/options.styles` 更新为实际 5 项并新增 `shot_sizes`;§3.4 校验规则补充 |
+| v0.7   | 2026-06-12   | **工作流画布 + 3D 导演台整体进契约**：① 新增 §2.6 `WorkflowDoc`/`WfNode`（7 种节点 kind，新增 `director`）与 `DirectorSave` 全结构（8 种素体 BodyType、姿势 pose 25 参数 + 20 预设、机位 DcCam{pos/target/fov/look}、截图 DcShot、布景 backdrop）；② 新增 §3.10：`GET/PUT /projects/:id/workflow` 整包 + 乐观锁 version（当前 mock 在 localStorage `mm-wf-<pid>`）、`POST /director/layout-parse` 识图生成站位（P2，当前前端 mock 仅插布景）；③ 资产策略：mock 阶段截图/参考图/布景 url 为 dataURL，接后端后一律先 `POST /uploads/image` 换 TOS URL 再入包，整包建议 ≤2MB；GLB 素体为前端静态资源后端无需提供；④ @ 提及素材复用既有 characters/scenes/props 接口无新增；⑤ §5 新增待对齐 16–18（整包vs增量、director 图片分桶、识图任务化）。 |

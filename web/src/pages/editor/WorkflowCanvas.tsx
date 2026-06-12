@@ -4,6 +4,7 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { listTasks } from "@/api/tasks";
 import { PlusIcon, CloseIcon, PlayIcon } from "@/components/icons";
+import { DirectorConsole, type DirectorSave } from "./DirectorConsole";
 import type { Character, Project, Prop, Scene } from "@/types";
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
   props: Prop[];
 }
 
-type NodeKind = "text" | "image" | "video" | "audio" | "agent" | "script";
+type NodeKind = "text" | "image" | "video" | "audio" | "agent" | "script" | "director";
 
 type GenType = "agent" | "image" | "video" | "audio" | "text";
 
@@ -47,6 +48,7 @@ interface WfNode {
   url: string | null;
   gen?: WfGen;
   generated?: boolean; // 由「剧本分镜头」生成,非用户手动新建
+  director?: DirectorSave; // 导演台节点的 3D 场景存档
 }
 
 interface WfEdge {
@@ -64,10 +66,11 @@ const SIZE: Record<NodeKind, { w: number; h: number }> = {
   audio: { w: 480, h: 270 },
   agent: { w: 480, h: 116 },
   script: { w: 600, h: 300 },
+  director: { w: 480, h: 270 },
 };
 
 const KIND_LABEL: Record<NodeKind, string> = {
-  text: "文本", image: "图片", video: "视频", audio: "音频", agent: "Agent", script: "剧本分镜头",
+  text: "文本", image: "图片", video: "视频", audio: "音频", agent: "Agent", script: "剧本分镜头", director: "导演台",
 };
 
 const KIND_COLOR: Record<NodeKind, string> = {
@@ -77,6 +80,7 @@ const KIND_COLOR: Record<NodeKind, string> = {
   audio: "oklch(70% .12 150)",
   agent: "oklch(70% .13 25)",
   script: "oklch(70% .13 330)",
+  director: "oklch(76% .13 60)",
 };
 
 // 节点生成器(点击节点弹出的提示词面板)
@@ -120,7 +124,7 @@ const VIDEO_DUR = [3, 5, 10];
 const VIDEO_RES = ["480P", "720P", "1080P"];
 
 // 剧本分镜头节点本质是文本→文本,复用文本模型(GPT-5.4)
-const genTypeOf = (kind: NodeKind): GenType => (kind === "agent" ? "agent" : kind === "script" ? "text" : kind);
+const genTypeOf = (kind: NodeKind): GenType => (kind === "agent" ? "agent" : kind === "script" || kind === "director" ? "text" : kind);
 const defaultGen = (kind: NodeKind): WfGen => ({
   type: genTypeOf(kind),
   model: GEN_MODELS[genTypeOf(kind)][0],
@@ -197,12 +201,19 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
   const pendingVoiceNode = useRef<string | null>(null);
   const [compTall, setCompTall] = useState(false);
   const [compSent, setCompSent] = useState(false);
+  // @ 提及素材:输入框键入 @ 弹出素材分类菜单(本项目 / 跨项目 / 画布,继续输入即按关键词搜索)
+  const [mention, setMention] = useState<{ id: string; q: string } | null>(null);
+  const [mentionCat, setMentionCat] = useState<"proj" | "cross" | "canvas" | null>(null);
+  const mentionInput = useRef<HTMLTextAreaElement | null>(null);
   const sentTimer = useRef<number | null>(null);
   // 视频参考槽的素材选择器:打开的槽 key + 选中的库 tab
   const [pickSlot, setPickSlot] = useState<string | null>(null);
   const [pickTab, setPickTab] = useState<"char" | "scene" | "prop">("char");
   const refFileRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<{ id: string; key: string } | null>(null);
+
+  // 导演台节点:打开的节点 id(全屏 3D 覆盖层)
+  const [directorOpen, setDirectorOpen] = useState<string | null>(null);
 
   // 底部工具栏:工具(选择/抓手)、隐藏连线、全屏
   const [tool, setTool] = useState<"select" | "hand">("select");
@@ -262,6 +273,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
     setSelected(new Set([id]));
     setCompMenu(null); setCompTall(false); setCompSent(false); setPickSlot(null);
     setAudioParam(false); setCloneOpen(false); setRecording(false);
+    setMention(null); setMentionCat(null);
   };
   const addMyVoice = (id: string, name: string) => {
     const cur = nodeById(id)?.gen?.myVoices ?? [];
@@ -281,7 +293,9 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
   const prevSnap = useRef<{ v: number | null; h: number | null }>({ v: null, h: null });
 
   useEffect(() => {
-    localStorage.setItem(`mm-wf-${project.id}`, JSON.stringify({ nodes, edges }));
+    try {
+      localStorage.setItem(`mm-wf-${project.id}`, JSON.stringify({ nodes, edges }));
+    } catch { /* 截图/参考图过多可能超出配额,放弃本次持久化 */ }
   }, [nodes, edges, project.id]);
 
   const tasksQuery = useQuery({
@@ -602,7 +616,11 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setLinking(null); setMenu(null); setNodeMenu(null); setCompMenu(null); setPickSlot(null); setSelected(new Set()); }
+      if (directorOpen) return; // 导演台打开时,快捷键交给 3D 控制台
+      if (e.key === "Escape") {
+        if (mention) { setMention(null); setMentionCat(null); return; }
+        setLinking(null); setMenu(null); setNodeMenu(null); setCompMenu(null); setPickSlot(null); setSelected(new Set());
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && selected.size) {
         const ae = document.activeElement;
         if (ae && /TEXTAREA|INPUT/.test(ae.tagName)) return;
@@ -615,7 +633,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected]);
+  }, [selected, directorOpen, mention]);
 
   // ── 上传 / 粘贴 ──
   const pendingAt = useRef<{ x: number; y: number } | null>(null);
@@ -685,6 +703,117 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
   const setRef = (id: string, key: string, url: string | null) => {
     const cur = nodeById(id)?.gen?.refs ?? {};
     patchGen(id, { refs: { ...cur, [key]: url } });
+  };
+
+  // ── @ 提及素材 ──
+  const onPrompt = (n: WfNode, e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    patchGen(n.id, { prompt: e.target.value });
+    const el = e.target;
+    mentionInput.current = el;
+    const pos = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, pos);
+    const at = before.lastIndexOf("@");
+    if (at >= 0 && !/\s/.test(before.slice(at + 1))) {
+      setMention({ id: n.id, q: before.slice(at + 1) });
+      if (before.slice(at + 1)) setMentionCat(null);
+    } else {
+      setMention(null);
+      setMentionCat(null);
+    }
+  };
+  const insertMention = (name: string) => {
+    const el = mentionInput.current;
+    const m = mention;
+    if (!el || !m) return;
+    const pos = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, pos);
+    const at = before.lastIndexOf("@");
+    if (at < 0) return;
+    const next = `${before.slice(0, at)}@${name} ${el.value.slice(pos)}`;
+    patchGen(m.id, { prompt: next });
+    setMention(null);
+    setMentionCat(null);
+    const caret = at + name.length + 2;
+    window.setTimeout(() => { el.focus(); el.setSelectionRange(caret, caret); }, 0);
+  };
+  const hueGrad = (hue: number) => `linear-gradient(135deg, oklch(55% .12 ${hue}), oklch(35% .10 ${hue}))`;
+  const renderMention = (n: WfNode) => {
+    if (!mention || mention.id !== n.id) return null;
+    const q = mention.q.trim().toLowerCase();
+    const chars = characters.map((c) => ({ key: `c${c.id}`, name: c.name, url: c.ref_image_url, hue: c.hue, tag: "角色" }));
+    const scs = scenes.map((s) => ({ key: `s${s.id}`, name: s.name, url: s.image_url, hue: s.hue, tag: "场景" }));
+    const prs = propAssets.map((p) => ({ key: `p${p.id}`, name: p.name, url: p.image_url, hue: p.hue, tag: "道具" }));
+    const nds = nodes.filter((x) => x.id !== n.id && x.kind !== "agent" && x.kind !== "director");
+    const assetRow = (a: { key: string; name: string; url: string | null; hue: number; tag: string }) => (
+      <button key={a.key} className="wf-mt-it" onClick={() => insertMention(a.name)}>
+        {a.url ? <img src={a.url} alt="" draggable={false} /> : <span className="ph" style={{ background: hueGrad(a.hue) }}>{a.name[0]}</span>}
+        <span className="nm">{a.name}</span>
+        <span className="tg">{t(a.tag)}</span>
+      </button>
+    );
+    const nodeRow = (x: WfNode) => (
+      <button key={x.id} className="wf-mt-it" onClick={() => insertMention(x.title)}>
+        <span className="dot" style={{ background: KIND_COLOR[x.kind] }} />
+        <span className="nm">{x.title}</span>
+        <span className="tg">{t(KIND_LABEL[x.kind])}</span>
+      </button>
+    );
+    if (q) {
+      const hits = [...chars, ...scs, ...prs].filter((a) => a.name.toLowerCase().includes(q));
+      const nhits = nds.filter((x) => x.title.toLowerCase().includes(q));
+      return (
+        <div className="wf-mention" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="hd">{t("搜索")} “{mention.q}”</div>
+          <div className="ls">
+            {hits.map(assetRow)}
+            {nhits.map(nodeRow)}
+            {hits.length + nhits.length === 0 && <div className="emp">{t("无匹配素材")}</div>}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="wf-mention" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="hd">{t("分类")}</div>
+        {([["proj", "本项目"], ["cross", "跨项目"], ["canvas", "画布"]] as const).map(([k, lb]) => (
+          <button key={k} className={cn("wf-mt-cat", mentionCat === k && "on")} onClick={() => setMentionCat(mentionCat === k ? null : k)}>
+            {t(lb)} <span className="ar">›</span>
+          </button>
+        ))}
+        <div className="ft">{t("输入关键词搜索")}</div>
+        {mentionCat && (
+          <div className="wf-mention-sub">
+            {mentionCat === "proj" && (
+              <div className="ls">
+                <div className="hd">{t("角色")}</div>
+                {chars.length === 0 && <div className="emp">{t("暂无素材")}</div>}
+                {chars.map(assetRow)}
+                <div className="hd">{t("场景")}</div>
+                {scs.length === 0 && <div className="emp">{t("暂无素材")}</div>}
+                {scs.map(assetRow)}
+                <div className="hd">{t("道具")}</div>
+                {prs.length === 0 && <div className="emp">{t("暂无素材")}</div>}
+                {prs.map(assetRow)}
+              </div>
+            )}
+            {mentionCat === "cross" && (
+              <div className="ls">
+                <div className="hd">{t("角色库(全局,跨项目可用)")}</div>
+                {chars.length === 0 && <div className="emp">{t("暂无素材")}</div>}
+                {chars.map(assetRow)}
+              </div>
+            )}
+            {mentionCat === "canvas" && (
+              <div className="ls">
+                <div className="hd">{t("画布节点")}</div>
+                {nds.length === 0 && <div className="emp">{t("画布暂无其他节点")}</div>}
+                {nds.map(nodeRow)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
   const submitGen = (n: WfNode) => {
     const g = genOf(n);
@@ -793,6 +922,20 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
           </div>
         );
+      case "director":
+        return (
+          <div className="dc-card">
+            <div className="dc-card-inner" />
+            <button className="dc-launch" onClick={(e) => { e.stopPropagation(); setDirectorOpen(n.id); }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3.5 9.5h17v9a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z" />
+                <path d="m3.5 9.5 1-4.2 16.2 2-0.7 2.2" />
+                <path d="m8.2 6 2.4 3M13 6.6l2.4 3" />
+              </svg>
+              Director Console
+            </button>
+          </div>
+        );
       case "agent":
         return (
           <div className="wf-agent">
@@ -873,7 +1016,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
 
         {(() => {
           const n = solo ? nodeById(solo) : null;
-          if (!n || n.kind === "agent") return null;
+          if (!n || n.kind === "agent" || n.kind === "director") return null;
           const g = genOf(n);
           const W = compTall ? 760 : 560;
           const showSize = g.type === "image" || g.type === "video";
@@ -903,6 +1046,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
               >
                 <button className="wf-comp-expand" title={t("展开")} onClick={() => setCompTall((v) => !v)}>⤢</button>
+                {renderMention(n)}
                 <div className="wf-vtabs">
                   {VMODES.map((m) => (
                     <button key={m.id} className={cn("wf-vtab", vmode === m.id && "on")} onClick={() => { patchGen(n.id, { vmode: m.id }); setPickSlot(null); }}>
@@ -973,7 +1117,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
                   placeholder={t("描述您的修改或生成需求…")}
                   maxLength={10000}
                   value={g.prompt}
-                  onChange={(e) => patchGen(n.id, { prompt: e.target.value })}
+                  onChange={(e) => onPrompt(n, e)}
                 />
                 <div className="wf-vcount">{g.prompt.length}/10000</div>
 
@@ -1068,6 +1212,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
               >
                 <button className="wf-comp-expand" title={t("展开")} onClick={() => setCompTall((v) => !v)}>⤢</button>
+                {renderMention(n)}
                 <div className="wf-atop">
                   <div className="wf-comp-dd">
                     <button className="wf-atag" onClick={() => setCompMenu(compMenu === "pause" ? null : "pause")}>{t("停顿")} <span className="cv">⌄</span></button>
@@ -1090,7 +1235,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
                   className="wf-comp-input"
                   placeholder={t("输入要合成的文字…")}
                   value={g.prompt}
-                  onChange={(e) => patchGen(n.id, { prompt: e.target.value })}
+                  onChange={(e) => onPrompt(n, e)}
                 />
                 <div className="wf-comp-row">
                   <div className="wf-comp-dd">
@@ -1251,11 +1396,12 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
               >
                 <button className="wf-comp-expand" title={t("展开")} onClick={() => setCompTall((v) => !v)}>⤢</button>
+                {renderMention(n)}
                 <textarea
                   className="wf-comp-input"
                   placeholder={isGen ? t("分镜头脚本内容(可编辑)…") : t("粘贴或输入剧情文本,生成分镜头脚本…")}
                   value={g.prompt}
-                  onChange={(e) => patchGen(n.id, { prompt: e.target.value })}
+                  onChange={(e) => onPrompt(n, e)}
                 />
                 <div className="wf-comp-row">
                   {!isGen && <span className="wf-comp-chip static"><span className="gl">≣</span> {t("剧本分镜头生成")}</span>}
@@ -1295,6 +1441,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
             >
               <button className="wf-comp-expand" title={t("展开")} onClick={() => setCompTall((v) => !v)}>⤢</button>
+              {renderMention(n)}
               {showThumb && (
                 <div className="wf-comp-thumb-wrap">
                   <button
@@ -1334,7 +1481,7 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
                 className="wf-comp-input"
                 placeholder={ph}
                 value={g.prompt}
-                onChange={(e) => patchGen(n.id, { prompt: e.target.value })}
+                onChange={(e) => onPrompt(n, e)}
               />
               <div className="wf-comp-row">
                 <div className="wf-comp-dd">
@@ -1536,6 +1683,10 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
             <span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M7 8h10M7 12h10M7 16h6" /></svg></span>
             <span className="tx"><b>{t("剧本分镜头")} <span className="badge">GPT-5.4</span></b><small>{t("剧情文本生成分镜头脚本")}</small></span>
           </button>
+          <button className="wf-mi" onClick={() => { addNode("director", { x: menu.wx, y: menu.wy }); setMenu(null); }}>
+            <span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 9.5h17v9a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z" /><path d="m3.5 9.5 1-4.2 16.2 2-0.7 2.2" /><path d="m8.2 6 2.4 3M13 6.6l2.4 3" /></svg></span>
+            <span className="tx"><b>{t("导演台")} <span className="badge">3D</span></b><small>{t("3D 站位 / 机位 / 姿势编排")}</small></span>
+          </button>
 
           <div className="wf-mi-sep" />
           <div className="wf-mi-row">
@@ -1673,6 +1824,31 @@ export function WorkflowCanvas({ project, characters, scenes, props: propAssets 
           e.target.value = "";
         }}
       />
+
+      {/* 导演台:全屏 3D 控制台(portal 到 body,场景存档随节点持久化)*/}
+      {directorOpen && (() => {
+        const n = nodeById(directorOpen);
+        if (!n) return null;
+        return (
+          <DirectorConsole
+            initial={n.director}
+            onSave={(d) => setNodes((ns) => ns.map((x) => (x.id === n.id ? { ...x, director: d } : x)))}
+            onClose={() => setDirectorOpen(null)}
+            onExportImage={(url, name) => addNode("image", { x: n.x + SIZE.director.w + 380, y: n.y + 135 }, { url, title: name })}
+            onExportShot={(url, name) => {
+              // 截图节点挂在导演台右侧,按已连出的数量纵向排开,并自动连线
+              const outCount = edges.filter((e) => e.from === n.id).length;
+              const id = addNode(
+                "image",
+                { x: n.x + SIZE.director.w + 420, y: n.y + 135 + outCount * 340 },
+                { url, title: `${n.title} ${name}` },
+              );
+              const eid = `${n.id}->${id}`;
+              setEdges((es) => (es.some((x) => x.id === eid) ? es : [...es, { id: eid, from: n.id, to: id }]));
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
