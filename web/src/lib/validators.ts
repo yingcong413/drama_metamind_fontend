@@ -16,6 +16,7 @@ export function isFilled(g: GlobalLayer, fieldId: string): boolean {
 
 export function isShotFilled(s: Shot, fieldId: string): boolean {
   switch (fieldId) {
+    case "description": return !!s.description;
     case "cast":      return (s.cast_ids ?? []).length > 0;
     case "shotSize":  return !!s.shot_size;
     case "action":    return !!(s.action?.start || s.action?.mid || s.action?.end);

@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
+import { createBrowserRouter, createHashRouter, Navigate, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { EditorPage } from "@/pages/editor/EditorPage";
@@ -12,6 +12,8 @@ import { AdminRechargePage } from "@/pages/admin/AdminRechargePage";
 import { AdminCreateOrgPage } from "@/pages/admin/AdminCreateOrgPage";
 import { AdminProjectsPage } from "@/pages/admin/AdminProjectsPage";
 import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
+import { AdminUsagePage } from "@/pages/admin/AdminUsagePage";
+import { AdminPricingPage } from "@/pages/admin/AdminPricingPage";
 import { LoginPage } from "@/pages/login/LoginPage";
 import { useAuthStore } from "@/stores/auth";
 
@@ -25,7 +27,10 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export const router = createBrowserRouter([
+// 单文件 demo(file:// 双击)用 hash 路由,常规部署仍用 history 路由
+const makeRouter = import.meta.env.VITE_HASH_ROUTER === "true" ? createHashRouter : createBrowserRouter;
+
+export const router = makeRouter([
   { path: "/",                       element: <Navigate to="/dashboard" replace /> },
   { path: "/dashboard",              element: <RequireAuth><DashboardPage /></RequireAuth> },
   { path: "/editor",                 element: <RequireAuth><EditorPage /></RequireAuth> },
@@ -46,6 +51,10 @@ export const router = createBrowserRouter([
   { path: "/admin/projects",         element: <RequireAuth><AdminProjectsPage /></RequireAuth> },
   // v0.9.27: 平台管理员管理所有账号(验证账号 / 额度)
   { path: "/admin/users",            element: <RequireAuth><AdminUsersPage /></RequireAuth> },
+  // v3: 平台管理员查看全平台积分消耗(主/子账号 · token · 快币)
+  { path: "/admin/usage",            element: <RequireAuth><AdminUsagePage /></RequireAuth> },
+  // v3: 平台管理员调 Credit 定价(充值档基准 + 四套订阅倍率/折扣核算)
+  { path: "/admin/pricing",          element: <RequireAuth><AdminPricingPage /></RequireAuth> },
   { path: "/login",                  element: <LoginPage /> },
   { path: "*",                       element: <Navigate to="/dashboard" replace /> },
 ]);

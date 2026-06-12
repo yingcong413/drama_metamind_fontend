@@ -1,9 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { viteSingleFile } from "vite-plugin-singlefile";
 import path from "node:path";
 
-export default defineConfig({
-  plugins: [react()],
+// `vite build --mode singlefile` 把整个前端打成一个自包含 index.html
+// (mock 数据 + hash 路由 + 自动登录 demo),测试者双击即可用,无需后端/服务器。
+export default defineConfig(({ mode }) => ({
+  base: mode === "singlefile" ? "./" : "/",
+  plugins: [react(), ...(mode === "singlefile" ? [viteSingleFile()] : [])],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -44,4 +48,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

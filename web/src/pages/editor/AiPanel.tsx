@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useT, useTf } from "@/lib/i18n";
-import type { Character, Project } from "@/types";
+import type { Character, Project, Scene, Prop } from "@/types";
+import { StoryboardWizard, type StoryboardSelection } from "./StoryboardWizard";
 import { b64ToFile, chatComplete, generateImage, isMetamindConfigured, type AiUsage, type ChatMessage } from "@/api/metamind";
 import { generateAndFill } from "@/lib/aiFill";
 import { uploadGlobalImage } from "@/lib/uploadGlobalImage";
@@ -18,6 +19,8 @@ interface AiPanelProps {
   project: Project;
   setProject: (p: Project) => void;
   characters: Character[];
+  scenes: Scene[];
+  props: Prop[];
   onCharactersChanged: () => void;
   /**
    * 把分镜头脚本宫格图导入「字段 07 · 分镜头脚本」(global.storyboard_image_url)。
@@ -33,14 +36,6 @@ interface AiPanelProps {
 type FlowKind = "image" | "text";
 type ModelKind = FlowKind;
 type FlowId = "character" | "scene" | "prop" | "story" | "storyboard";
-
-// 分镜头脚本「宫格数」选项(秦总需求 R6:6/9/12/15 宫格)
-const GRID_LABELS: Record<string, number> = {
-  "六宫格": 6,
-  "九宫格": 9,
-  "十二宫格": 12,
-  "十五宫格": 15,
-};
 
 // 自由文本里识别「N 宫格分镜头」意图(秦总案例:一段剧情 + “帮我生成一张九宫格的分镜头”)。
 // 命中则按宫格数把整段剧情画成分镜头脚本,并支持导入「字段 07」。
@@ -77,6 +72,8 @@ interface Step {
   key: string;
   q: string;
   opts: string[];
+  type?: "lib" | "text";
+  source?: "character" | "scene" | "prop";
 }
 interface FlowDef {
   kind: FlowKind;
@@ -85,7 +82,7 @@ interface FlowDef {
 }
 
 const MODEL_OPTIONS: Record<ModelKind, string[]> = {
-  image: ["GPT-Image-2", "Gemini 1.5 Flash Image Preview", "Gemini 1.5 Pro Image Preview"],
+  image: ["GPT-Image-2", "gemini-3-pro-image-preview", "gemini-3.1-flash-image-preview"],
   text: ["GPT-5.5", "Claude Opus-4.8"],
 };
 
@@ -123,9 +120,10 @@ const FLOWS: Record<FlowId, FlowDef> = {
     kind: "image",
     label: "生成分镜图",
     steps: [
-      { key: "grid", q: "要几宫格的分镜图？", opts: ["六宫格", "九宫格", "十二宫格", "十五宫格"] },
-      { key: "genre", q: "短剧类型是？", opts: ["古装", "都市", "悬疑", "校园", "武侠", "甜宠", "科幻"] },
-      { key: "style", q: "分镜画风？", opts: ["黑白线稿", "素描草图", "彩色概念图"] },
+      { key: "chars", q: "选择角色库", opts: [], type: "lib", source: "character" },
+      { key: "scenes", q: "选择场景库", opts: [], type: "lib", source: "scene" },
+      { key: "props", q: "选择道具库", opts: [], type: "lib", source: "prop" },
+      { key: "content", q: "填写分镜内容", opts: [], type: "text" },
     ],
   },
   story: {
@@ -226,18 +224,20 @@ const PROMPT_HEAD: Record<FlowId, string> = {
   storyboard: "为短剧生成一张分镜头脚本(storyboard),要求:",
 };
 function buildPrompt(id: FlowId, ans: Ans): string {
-  // 分镜头脚本:拼成「N 宫格 + 每格一个连续镜头 + 标镜号」的出图提示词。
+  // 分镜头脚本:按所选角色 / 场景 / 道具 + 分镜内容,拼成「N 宫格 + 每格一个连续镜头 + 标镜号」的出图提示词。
   if (id === "storyboard") {
-    const n = GRID_LABELS[ans.grid || "九宫格"] ?? 9;
+    const n = ans.gridN ? parseInt(ans.gridN, 10) || 9 : 9;
     const { cols, rows } = gridLayout(n);
-    const genre = ans.genre || "短剧";
-    const style = ans.style || "黑白线稿";
+    const charsPart = ans.chars ? `出场角色:${ans.chars};` : "";
+    const scenesPart = ans.scenes ? `场景:${ans.scenes};` : "";
+    const propsPart = ans.props ? `关键道具:${ans.props};` : "";
+    const contentPart = ans.content ? `分镜内容:${ans.content}。` : "";
     return (
       `生成一张 ${n} 宫格的分镜头脚本(storyboard 故事板),严格排成 ${rows} 行 × ${cols} 列的等大网格,` +
       `每格大小一致、对齐规整、格子间留细白边,按从左到右、从上到下的顺序,` +
       `每一格画一个连续的电影镜头并在左上角标注镜号(①②③…);` +
-      `${style}分镜草图风格,${genre}题材,镜头之间动作连贯、可直接用于拍摄参考。` +
-      `画面只画分镜内容,不要添加任何未提及的元素。`
+      `${charsPart}${scenesPart}${propsPart}${contentPart}` +
+      `分镜草图风格,镜头之间动作连贯、可直接用于拍摄参考。画面只画分镜内容,不要添加任何未提及的元素。`
     );
   }
   const def = FLOWS[id];
@@ -439,7 +439,7 @@ function loadLS(key: string): PanelSnapshot | null {
   }
 }
 
-export function AiPanel({ project, setProject, characters, onCharactersChanged, onImportStoryboard }: AiPanelProps) {
+export function AiPanel({ project, setProject, characters, scenes, props, onCharactersChanged, onImportStoryboard }: AiPanelProps) {
   const t = useT();
   const tf = useTf();
   const configured = isMetamindConfigured();
@@ -598,7 +598,10 @@ export function AiPanel({ project, setProject, characters, onCharactersChanged, 
 
   function startGeneration(id: FlowId, ans: Ans) {
     const def = FLOWS[id];
-    const summary = summaryOf(def, ans);
+    const summary =
+      id === "storyboard"
+        ? [ans.chars, ans.scenes, ans.props, ans.content].filter(Boolean).join(" · ") || t("分镜图")
+        : summaryOf(def, ans);
     const mid = uid();
     setMessages((m) => [
       ...m,
@@ -839,6 +842,19 @@ export function AiPanel({ project, setProject, characters, onCharactersChanged, 
     setFlowStep(0);
     setFlowAns({});
   }
+  function generateStoryboard(sel: StoryboardSelection) {
+    const ans: Ans = {
+      grid: sel.gridLabel,
+      gridN: String(sel.grid),
+      chars: sel.chars || null,
+      scenes: sel.scenes || null,
+      props: sel.props || null,
+      content: sel.content || null,
+    };
+    lastResult.current = { flowId: "storyboard", ans };
+    setFlowId(null);
+    startGeneration("storyboard", ans);
+  }
   function selectOption(val: string | null, skipped: boolean) {
     if (!flowId) return;
     const def = FLOWS[flowId];
@@ -1003,6 +1019,7 @@ export function AiPanel({ project, setProject, characters, onCharactersChanged, 
     const v = input.trim();
     if (!v) return;
     setInput("");
+    if (flowId === "storyboard") return;
     if (flowId) selectOption(v, false);
     else freeSend(v);
   }
@@ -1058,6 +1075,10 @@ export function AiPanel({ project, setProject, characters, onCharactersChanged, 
         flowId={flowId}
         flowStep={flowStep}
         flowAns={flowAns}
+        characters={characters}
+        scenes={scenes}
+        props={props}
+        onStoryboardGenerate={generateStoryboard}
         onStart={startFlow}
         onCancel={() => {
           setFlowId(null);
@@ -1504,6 +1525,10 @@ function QuickArea({
   flowId,
   flowStep,
   flowAns,
+  characters,
+  scenes,
+  props,
+  onStoryboardGenerate,
   onStart,
   onCancel,
   onSelect,
@@ -1521,6 +1546,10 @@ function QuickArea({
   flowId: FlowId | null;
   flowStep: number;
   flowAns: Ans;
+  characters: Character[];
+  scenes: Scene[];
+  props: Prop[];
+  onStoryboardGenerate: (sel: StoryboardSelection) => void;
   onStart: (id: FlowId) => void;
   onCancel: () => void;
   onSelect: (v: string) => void;
@@ -1535,6 +1564,17 @@ function QuickArea({
 }) {
   const t = useT();
   const tf = useTf();
+  if (flowId === "storyboard") {
+    return (
+      <StoryboardWizard
+        characters={characters}
+        scenes={scenes}
+        props={props}
+        onCancel={onCancel}
+        onGenerate={onStoryboardGenerate}
+      />
+    );
+  }
   if (flowId) {
     const def = FLOWS[flowId];
     const step = def.steps[flowStep];
@@ -1592,7 +1632,7 @@ function QuickArea({
           <ActionBtn icon={I.person} bg="var(--layer-shot-soft)" fg="var(--layer-shot)" title={t("生成角色")} sub={t("风格 / 性别 / 身份…")} onClick={() => onStart("character")} />
           <ActionBtn icon={I.scene} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成场景")} sub={t("地点 / 时间 / 氛围")} onClick={() => onStart("scene")} />
           <ActionBtn icon={I.prop} bg="var(--layer-output-soft)" fg="var(--layer-output)" title={t("生成道具")} sub={t("类型 / 材质 / 颜色")} onClick={() => onStart("prop")} />
-          <ActionBtn icon={I.film} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成分镜图")} sub={t("6/9/12/15 宫格")} onClick={() => onStart("storyboard")} />
+          <ActionBtn icon={I.film} bg="var(--layer-global-soft)" fg="var(--layer-global)" title={t("生成分镜图")} sub={t("角色 / 场景 / 道具 / 内容")} onClick={() => onStart("storyboard")} />
         </div>
       </div>
     );

@@ -21,13 +21,16 @@ import { PromptPreviewModal } from "./PromptPreviewModal";
 import { GenerateRequestModal } from "./GenerateRequestModal";
 import { AiPanel } from "./AiPanel";
 import { FrameComposer } from "./FrameComposer";
+import { WorkflowCanvas } from "./WorkflowCanvas";
 import { useGenModeStore, type GenMode } from "@/stores/genMode";
 
 type ActiveKey = "global" | `shot:${string}`;
 
-// 工作台左上角生成模式:常规(整套编辑器) / 首尾帧 / 智能多帧(参考即梦,补衔接镜头)。
-const MODE_OPTS: { id: GenMode; label: string }[] = [
+// 工作台左上角生成模式:工作流 / 精细控制 ‖ 首尾帧 / 智能多帧(divider 隔断两组)。
+const MODE_OPTS: ({ id: GenMode; label: string } | "divider")[] = [
+  { id: "workflow", label: "工作流" },
   { id: "regular", label: "精细控制" },
+  "divider",
   { id: "first_last", label: "首尾帧模式" },
   { id: "smart_multi", label: "智能多帧模式" },
 ];
@@ -151,14 +154,17 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectQuery.data, project?.id]);
 
-  // 生成模式(zustand 持久化):非「常规」即 solo —— 隐藏导航 / AI 面板,主区独占,渲染 FrameComposer。
+  // 生成模式(zustand 持久化):首尾帧/智能多帧 = solo(隐藏导航与 AI 面板,渲染 FrameComposer);
+  // workflow = 无限画布(隐藏左导航,保留 AI 面板)。
   const genMode = useGenModeStore((s) => s.mode);
   const setGenMode = useGenModeStore((s) => s.setMode);
-  const solo = genMode !== "regular";
+  const solo = genMode === "first_last" || genMode === "smart_multi";
+  const isWorkflow = genMode === "workflow";
 
   const [activeKey, setActiveKey] = useState<ActiveKey>("global");
   const [activeShot, setActiveShot] = useState<string>("");
   const [scrollAnchor, setScrollAnchor] = useState<string | null>(null);
+  const [scrollTick, setScrollTick] = useState(0);
   const [globalCollapsed, setGlobalCollapsed] = useState(false);
   const [shotsCollapsed, setShotsCollapsed] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -312,27 +318,27 @@ export function EditorPage() {
       const sc = main.querySelector<HTMLElement>(".main-content");
       if (!sc) return;
       const el = sc.querySelector<HTMLElement>(`[data-anchor="${target}"]`);
-      if (!el) return;
-      const top = Math.max(0, el.offsetTop - 24);
-      sc.scrollTop = top;
+      if (!el) return false;
+      // 用 rect 相对滚动容器算偏移，兼容任意嵌套(分组/行)的定位上下文
+      const top = Math.max(0, el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16);
       sc.scrollTo({ top, behavior: "smooth" });
+      return true;
     };
-    const t1 = setTimeout(doScroll, 30);
-    const t2 = setTimeout(doScroll, 200);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [scrollAnchor]);
+    // 多次重试：等待目标所在的折叠分组展开后再滚动
+    const timers = [0, 60, 160, 320].map((d) => setTimeout(doScroll, d));
+    return () => timers.forEach(clearTimeout);
+  }, [scrollAnchor, scrollTick]);
 
   const selectGlobal = (anchor: string | null = null) => {
     setActiveKey("global");
     setScrollAnchor(anchor);
+    setScrollTick((n) => n + 1);
   };
   const selectShot = (sid: string, anchor: string | null = null) => {
     setActiveKey(`shot:${sid}`);
     setActiveShot(sid);
     setScrollAnchor(anchor);
+    setScrollTick((n) => n + 1);
   };
 
   const updateGlobal = (g: GlobalLayer) => project && setProject({ ...project, global: g });
@@ -432,16 +438,20 @@ export function EditorPage() {
 
   const modeTabs = (
     <div className="segmented mode-seg">
-      {MODE_OPTS.map((m) => (
-        <button
-          key={m.id}
-          type="button"
-          className={genMode === m.id ? "active" : undefined}
-          onClick={() => setGenMode(m.id)}
-        >
-          {t(m.label)}
-        </button>
-      ))}
+      {MODE_OPTS.map((m, i) =>
+        m === "divider" ? (
+          <span key={`d${i}`} className="mode-divider" />
+        ) : (
+          <button
+            key={m.id}
+            type="button"
+            className={genMode === m.id ? "active" : undefined}
+            onClick={() => setGenMode(m.id)}
+          >
+            {t(m.label)}
+          </button>
+        ),
+      )}
     </div>
   );
 
@@ -451,7 +461,7 @@ export function EditorPage() {
         crumbs={[{ label: t("项目"), to: "/dashboard" }, { label: project.name }]}
         leftExtra={modeTabs}
         hideNav={solo}
-        actions={solo ? undefined : (
+        actions={solo || isWorkflow ? undefined : (
           <>
             {/* 必填项缺失常驻提示:点击展开具体列表 */}
             {!validation.canGenerate && (
@@ -514,11 +524,11 @@ export function EditorPage() {
       />
 
       <div
-        className={solo ? "editor solo" : "editor has-ai"}
+        className={solo ? "editor solo" : isWorkflow ? "editor workflow" : "editor has-ai"}
         ref={editorRef}
         style={!solo && aiWidth ? ({ ["--ai-w"]: aiWidth + "px" } as CSSProperties) : undefined}
       >
-        {!solo && (
+        {!solo && !isWorkflow && (
         <EditorNav
           project={project}
           activeKey={activeKey}
@@ -544,6 +554,13 @@ export function EditorPage() {
               set={updateGlobal}
               onGenerate={() => navigate(`/projects/${project.id}/result`)}
             />
+          ) : isWorkflow ? (
+            <WorkflowCanvas
+              project={project}
+              characters={charsQuery.data}
+              scenes={scenesQuery.data ?? []}
+              props={propsQuery.data ?? []}
+            />
           ) : (
           <>
           {!showShotView || !currentShot ? (
@@ -556,6 +573,7 @@ export function EditorPage() {
               scenes={scenesQuery.data ?? []}
               props={propsQuery.data ?? []}
               onAutoGenShots={autoGenerateShots}
+              scrollAnchor={scrollAnchor}
             />
           ) : (
             <ShotView
@@ -600,6 +618,8 @@ export function EditorPage() {
               project={project}
               setProject={setProject}
               characters={charsQuery.data}
+              scenes={scenesQuery.data ?? []}
+              props={propsQuery.data ?? []}
               onCharactersChanged={() => qc.refetchQueries({ queryKey: ["characters"] })}
               onImportStoryboard={(url, opts) => {
                 // 整图写入字段 07

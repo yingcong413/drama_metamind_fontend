@@ -32,6 +32,7 @@ export function ChangePasswordDialog({ onClose }: Props) {
 
   return (
     <div
+      className="pwd-mask"
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 1100,

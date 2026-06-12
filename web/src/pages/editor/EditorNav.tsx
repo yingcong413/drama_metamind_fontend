@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { ChevronIcon, CheckIcon, CopyIcon, DragIcon, PlusIcon, TrashIcon } from "@/components/icons";
-import { FIELD_DEFS } from "@/lib/fieldDefs";
+import { FIELD_DEFS, GLOBAL_GROUPS, type FieldDef } from "@/lib/fieldDefs";
 import { isFilled, isOutputFilled, isShotFilled } from "@/lib/validators";
 import type { Project } from "@/types";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
+
+const GLOBAL_DEF: Record<string, FieldDef> = Object.fromEntries(FIELD_DEFS.global.map((f) => [f.id, f]));
 
 interface Props {
   project: Project;
@@ -44,22 +47,29 @@ export function EditorNav(p: Props) {
         <span className="swatch" />
         <span>{t("全局场景层")}</span>
       </div>
-      {!p.globalCollapsed && FIELD_DEFS.global.map((f) => {
-        const filled = isGlobalFieldFilled(f.id, f.dataLayer);
-        const required = f.tags.includes("req");
-        const isActive = activeKey === "global" && scrollAnchor === "g-" + f.id;
+      {!p.globalCollapsed && GLOBAL_GROUPS.map((grp) => {
+        const fields = grp.ids.map((id) => GLOBAL_DEF[id]).filter(Boolean) as FieldDef[];
         return (
-          <div
-            key={f.id}
-            className={cn("tree-item", isActive && "active")}
-            onClick={() => p.selectGlobal("g-" + f.id)}
-          >
-            <span className="num">{f.num}</span>
-            <span>{t(f.title)}</span>
-            {required && !filled
-              ? <span className="req" />
-              : filled ? <CheckIcon className="icon done" /> : null}
-          </div>
+          <NavSubGroup key={grp.key} title={t(grp.title)} count={fields.length} defaultOpen={grp.key !== "other"}>
+            {fields.map((f) => {
+              const filled = isGlobalFieldFilled(f.id, f.dataLayer);
+              const required = f.tags.includes("req");
+              const isActive = activeKey === "global" && scrollAnchor === "g-" + f.id;
+              return (
+                <div
+                  key={f.id}
+                  className={cn("tree-item", isActive && "active")}
+                  onClick={() => p.selectGlobal("g-" + f.id)}
+                >
+                  <span className="num">{f.num}</span>
+                  <span>{t(f.title)}</span>
+                  {required && !filled
+                    ? <span className="req" />
+                    : filled ? <CheckIcon className="icon done" /> : null}
+                </div>
+              );
+            })}
+          </NavSubGroup>
         );
       })}
 
@@ -127,5 +137,19 @@ export function EditorNav(p: Props) {
       </div>
       <div style={{ height: 24 }} />
     </aside>
+  );
+}
+
+function NavSubGroup({ title, count, defaultOpen, children }: { title: string; count: number; defaultOpen: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <>
+      <div className={cn("tree-subsection", !open && "collapsed")} onClick={() => setOpen((o) => !o)}>
+        <span className="chev"><ChevronIcon /></span>
+        <span>{title}</span>
+        <span className="count">{count}</span>
+      </div>
+      {open && children}
+    </>
   );
 }

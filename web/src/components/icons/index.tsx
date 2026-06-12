@@ -112,3 +112,60 @@ export const GlobeIcon = (p: IconProps) => (
     <path d="M1.8 8h12.4M8 1.8c1.9 2 1.9 10.4 0 12.4M8 1.8c-1.9 2-1.9 10.4 0 12.4" stroke="currentColor" strokeWidth="1.3" />
   </svg>
 );
+
+const wrap24 = (p: IconProps) => ({
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  className: p.className ?? "icon",
+  ...p,
+});
+
+export const CoinIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9.5 9.2a2.4 2.4 0 0 1 2.5-1.7c1.4 0 2.3.8 2.3 1.9 0 2.3-4.6 1.4-4.6 3.7 0 1.1 1 1.9 2.3 1.9a2.5 2.5 0 0 0 2.5-1.7" /></svg>
+);
+export const CrownIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M3 18h18M4 8l4 4 4-6 4 6 4-4-1.5 10H5.5z" /></svg>
+);
+export const GiftIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M5 12v9h14v-9M12 8C12 5 10.5 4 9 4a2 2 0 0 0 0 4zM12 8c0-3 1.5-4 3-4a2 2 0 0 1 0 4z" /></svg>
+);
+export const TicketIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M2 9V7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z" /><path d="M15 5v14" /></svg>
+);
+export const BillIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M5 2v20l2-1.5L9 22l2-1.5L13 22l2-1.5L17 22l2-1.5V2l-2 1.5L15 2l-2 1.5L11 2 9 3.5 7 2z" /><path d="M9 8h6M9 12h6" /></svg>
+);
+export const OrgIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M3 21h18M6 21V5a1 1 0 0 1 1-1h7v17M14 8h3a1 1 0 0 1 1 1v12M9 8h0M9 12h0M9 16h0" /></svg>
+);
+export const WalletIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M19 7V5a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5" /><path d="M16.5 13h.01" /></svg>
+);
+export const OrgPlusIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M3 21h18M6 21V5a1 1 0 0 1 1-1h7v8M9 8h0M9 12h0M18 14v6M15 17h6" /></svg>
+);
+export const FolderIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+);
+export const UsersIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+);
+export const ChatIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 7v4M12 14h.01" /></svg>
+);
+export const HelpIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><circle cx="12" cy="12" r="9" /><path d="M9.2 9a3 3 0 0 1 5.6 1c0 2-3 2.2-3 3.2M12 17h.01" /></svg>
+);
+export const LockIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+);
+export const LogoutIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
+);
+export const ArrowRightIcon = (p: IconProps) => (
+  <svg {...wrap24(p)}><path d="M9 6l6 6-6 6" /></svg>
+);

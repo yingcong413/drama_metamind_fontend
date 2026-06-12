@@ -5,6 +5,10 @@ type Table = Record<string, string>;
 // 使用记录 / 充值（account）+ 平台管理（admin）+ 组织管理（org）。zh-CN 不在此。
 export const account: Partial<Record<Lang, Table>> = {
   en: {
+    "入门版": "Starter",
+    "进阶版": "Plus",
+    "专业版": "Pro",
+    "旗舰版": "Ultra",
     // —— account / crumbs ——
     "平台管理": "Platform",
     "手动充值": "Manual Top-up",
@@ -371,6 +375,10 @@ export const account: Partial<Record<Lang, Table>> = {
   },
 
   fr: {
+    "入门版": "Débutant",
+    "进阶版": "Avancé",
+    "专业版": "Professionnel",
+    "旗舰版": "Ultra",
     "平台管理": "Plateforme",
     "手动充值": "Recharge manuelle",
     "替人开企业": "Créer une org",
@@ -716,6 +724,10 @@ export const account: Partial<Record<Lang, Table>> = {
   },
 
   es: {
+    "入门版": "Inicial",
+    "进阶版": "Avanzado",
+    "专业版": "Profesional",
+    "旗舰版": "Ultra",
     "平台管理": "Plataforma",
     "手动充值": "Recarga manual",
     "替人开企业": "Crear org",
@@ -1061,6 +1073,10 @@ export const account: Partial<Record<Lang, Table>> = {
   },
 
   "zh-TW": {
+    "入门版": "入門版",
+    "进阶版": "進階版",
+    "专业版": "專業版",
+    "旗舰版": "旗艦版",
     "平台管理": "平台管理",
     "手动充值": "手動儲值",
     "替人开企业": "替人開企業",
@@ -1406,6 +1422,10 @@ export const account: Partial<Record<Lang, Table>> = {
   },
 
   ar: {
+    "入门版": "المبتدئ",
+    "进阶版": "المتقدم",
+    "专业版": "الاحترافي",
+    "旗舰版": "ألترا",
     "平台管理": "المنصة",
     "手动充值": "شحن يدوي",
     "替人开企业": "إنشاء مؤسسة",

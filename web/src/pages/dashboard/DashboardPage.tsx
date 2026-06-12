@@ -5,6 +5,7 @@ import { useT, useTf } from "@/lib/i18n";
 import { AppTopBar } from "@/components/layout/AppTopBar";
 import { PlusIcon } from "@/components/icons";
 import { createProject, listProjects } from "@/api/projects";
+import { useGenModeStore } from "@/stores/genMode";
 import { ProjectCard } from "./ProjectCard";
 import { NewProjectCard } from "./NewProjectCard";
 import { DashboardToolbar, type StatusFilter } from "./DashboardToolbar";
@@ -45,6 +46,8 @@ export function DashboardPage() {
     onSuccess: (p) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       setDialogOpen(false);
+      // 新建项目默认进入工作流(无限画布)模式
+      useGenModeStore.getState().setMode("workflow");
       navigate(`/projects/${p.id}/edit`);
     },
     onError: (e) => {

@@ -32,7 +32,7 @@ export function FShotCast({ value, set, projectChars, characters, onJumpToField5
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t("本剧还未指定任何角色")}</div>
           <div className="dim" style={{ fontSize: 12 }}>
-            {t("请先在「全局 · 字段 05 · 角色调用」中选择本剧涉及的角色，再回到这里指派本分镜出场角色。")}
+            {t("请先在「全局 · 字段 07 · 角色调用」中选择本剧涉及的角色，再回到这里指派本分镜出场角色。")}
           </div>
         </div>
         <button
@@ -40,7 +40,7 @@ export function FShotCast({ value, set, projectChars, characters, onJumpToField5
           onClick={onJumpToField5}
           style={{ marginLeft: "auto", flexShrink: 0 }}
         >
-          {t("前往字段 05 →")}
+          {t("前往字段 07 →")}
         </button>
       </div>
     );

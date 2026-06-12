@@ -31,7 +31,7 @@ export interface MicroBlock {
 }
 
 /** Seedance 2.0 接口支持的画面比例。 */
-export type VideoRatio = "16:9" | "9:16" | "1:1" | "adaptive";
+export type VideoRatio = "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "adaptive";
 
 // 视频分辨率。Seedance 2.0 / new-api 接口 metadata.resolution 文档支持 480p / 720p(默认 720p);
 // 1080p 由上游模型决定(部分模型名带 1080 后缀)。任务表(GenerationTask.resolution)仅记 720p / 1080p。

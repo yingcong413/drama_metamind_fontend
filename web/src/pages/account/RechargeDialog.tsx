@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { CloseIcon } from "@/components/icons";
-import { cn } from "@/lib/cn";
+import { Avatar } from "@/components/primitives/Avatar";
+import { CloseIcon, CoinIcon, ArrowRightIcon } from "@/components/icons";
+import { PayMethodModal } from "./PayMethodModal";
 import { formatYuanInt } from "@/lib/format";
 import { useT, useTf } from "@/lib/i18n";
+import { useAuthStore } from "@/stores/auth";
 import {
   createRechargeOrder,
   getRechargeOrder,
@@ -12,30 +14,40 @@ import {
   type CreateOrderResp,
   type PayMethod,
 } from "@/api/recharge";
-import type { Account, RechargeMethod } from "@/types";
+import type { Account } from "@/types";
 
 interface Props {
   account: Account;
   onClose: () => void;
 }
 
-const PRESETS_CNY = [10000, 50000, 100000, 500000]; // 人民币分
-const PRESETS_USD = [1000, 3000, 5000, 10000]; // 美元分($10/$30/$50/$100)
-
-// 前端 method → 后端 method
-function toPayMethod(m: RechargeMethod): PayMethod | null {
-  if (m === "wechat") return "wechat_pay";
-  if (m === "alipay") return "alipay";
-  if (m === "stripe") return "stripe";
-  return null; // bank 不走自助
+interface Pack {
+  credits: string;
+  orig?: string;
+  priceCents: number;
+  wide?: boolean;
+  bonus?: string;
 }
+
+const PACKS: Pack[] = [
+  { credits: "490", priceCents: 4900 },
+  { credits: "1,400", priceCents: 14000 },
+  { credits: "2,100", priceCents: 21000 },
+  { credits: "3,500", priceCents: 35000 },
+  { credits: "7,000", priceCents: 70000 },
+  { credits: "14,000", priceCents: 140000 },
+  { credits: "84,000", orig: "70,000", priceCents: 700000, wide: true },
+];
 
 export function RechargeDialog({ account, onClose }: Props) {
   const t = useT();
   const tf = useTf();
   const qc = useQueryClient();
-  const [amountCents, setAmountCents] = useState(50000);
-  const [method, setMethod] = useState<RechargeMethod>("wechat");
+  const user = useAuthStore((s) => s.user);
+
+  const [packId, setPackId] = useState(0);
+  const [showPay, setShowPay] = useState(false);
+  const [methodLabel, setMethodLabel] = useState("");
   const [phase, setPhase] = useState<"select" | "paying" | "done">("select");
   const [order, setOrder] = useState<CreateOrderResp | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -43,7 +55,13 @@ export function RechargeDialog({ account, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const pollRef = useRef<number | null>(null);
 
-  // 把支付串渲染成真实二维码图片
+  const amountCents = PACKS[packId].priceCents;
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   useEffect(() => {
     if (phase !== "paying" || !order?.qr_code) {
       setQrDataUrl(null);
@@ -55,22 +73,6 @@ export function RechargeDialog({ account, onClose }: Props) {
       .catch(() => { if (alive) setQrDataUrl(null); });
     return () => { alive = false; };
   }, [phase, order?.qr_code]);
-
-  // Stripe 走美元:金额输入/预设为美元,余额按实时汇率换算成人民币计入
-  const isStripe = method === "stripe";
-  const cur = isStripe ? "$" : "¥";
-  const presets = isStripe ? PRESETS_USD : PRESETS_CNY;
-  // 进/出 Stripe 时把金额重置成对应币种的默认值,避免把 ¥ 数额当成 $
-  const prevStripe = useRef(false);
-  useEffect(() => {
-    if (isStripe !== prevStripe.current) {
-      setAmountCents(isStripe ? 3000 : 50000);
-      prevStripe.current = isStripe;
-    }
-  }, [isStripe]);
-
-  const yuan = Math.floor(amountCents / 100);
-  const valid = amountCents >= 100 && (method === "wechat" || method === "alipay" || method === "stripe");
 
   const stopPoll = () => {
     if (pollRef.current) {
@@ -85,24 +87,21 @@ export function RechargeDialog({ account, onClose }: Props) {
     setPhase("done");
     qc.invalidateQueries({ queryKey: ["account"] });
     qc.invalidateQueries({ queryKey: ["recharges"] });
-    // 1.2s 后自动关闭
     window.setTimeout(onClose, 1200);
   };
 
-  const startPay = async () => {
-    const pm = toPayMethod(method);
-    if (!pm) return;
+  const startPay = async (pm: PayMethod, label: string) => {
+    setShowPay(false);
+    setMethodLabel(label);
     setBusy(true);
     setErr(null);
     try {
       const o = await createRechargeOrder({ amount_cents: amountCents, method: pm });
       setOrder(o);
       setPhase("paying");
-      // Stripe 是跳转支付:拿到 pay_url 后新标签打开 Checkout,完成后靠下面轮询到账
       if (o.pay_url && !o.qr_code) {
         window.open(o.pay_url, "_blank", "noopener");
       }
-      // 轮询订单状态
       pollRef.current = window.setInterval(async () => {
         try {
           const s = await getRechargeOrder(o.recharge_id);
@@ -112,7 +111,7 @@ export function RechargeDialog({ account, onClose }: Props) {
             setErr(t("支付失败，请重试"));
           }
         } catch {
-          /* 轮询错误忽略，下次再试 */
+          /* 轮询错误忽略 */
         }
       }, 2000);
     } catch (e) {
@@ -137,206 +136,123 @@ export function RechargeDialog({ account, onClose }: Props) {
 
   return (
     <>
-      <div className="drawer-mask" onClick={onClose} />
-      <div className="recharge-dialog">
-        <div className="recharge-head">
-          <div>
-            <h2>{t("账户充值")}</h2>
-            <div className="dim" style={{ fontSize: 13 }}>
-              {t("当前余额")}{" "}
-              <span className="mono" style={{ color: "var(--text)" }}>
-                ¥ {formatYuanInt(account.balance_cents)}
-              </span>{" "}
-              · {t("扫码支付到账")}
+      <div className="rc-mask" onClick={onClose}>
+        <div className="recharge-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="rc-head">
+            <h3 className="rc-title">{t("积分充值")}</h3>
+            <button className="rc-close" onClick={onClose}><CloseIcon /></button>
+          </div>
+
+          <div className="rc-user">
+            <Avatar name={user?.name ?? "你"} size="lg" />
+            <div className="rc-user-info">
+              <div className="rc-user-name">{user?.name ?? t("未命名")}</div>
+              <div className="rc-user-plan">
+                {t("当前为")} <span className="rc-plan-badge">FREE</span> Studio
+                <button className="rc-upgrade">{t("升级")}<ArrowRightIcon /></button>
+              </div>
+            </div>
+            <div className="rc-user-bal">
+              <span className="rc-bal-lbl">{t("积分")}</span>
+              <span className="rc-bal-coin"><CoinIcon /></span>
+              <span className="rc-bal-num">{Math.round(account.balance_cents / 100).toLocaleString()}</span>
             </div>
           </div>
-          <button className="btn-ghost btn-icon" onClick={onClose}>
-            <CloseIcon />
-          </button>
-        </div>
 
-        {phase === "select" && (
-          <div className="recharge-body">
-            <div className="dim-2 mono" style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>
-              {t("充值金额")}
+          {phase === "select" && (
+            <>
+              <div className="rc-grid">
+                {PACKS.map((p, i) => (
+                  <button
+                    key={i}
+                    className={
+                      "rc-pack" + (p.wide ? " rc-pack-wide" : "") + (packId === i ? " selected" : "")
+                    }
+                    onClick={() => setPackId(i)}
+                  >
+                    {p.wide && (
+                      <span className="rc-pack-badge">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+                        </svg>
+                        {t("会员额外赠送 20%")}
+                      </span>
+                    )}
+                    <div className="rc-pack-main">
+                      <span className="rc-pack-coin"><CoinIcon /></span>
+                      <span className="rc-pack-credits">
+                        {p.orig && <s>{p.orig}</s>}{p.credits}
+                      </span>
+                    </div>
+                    <div className="rc-pack-price">¥ {(p.priceCents / 100).toLocaleString()}</div>
+                  </button>
+                ))}
+              </div>
+
+              <p className="rc-note">
+                {t("提示：快速生成、去水印等会员权益仅在订阅后可用，单独购买积分不会解锁这些功能。购买的积分有效期 1 年，赠送积分有效期 31 天。")}
+                {t("客服联系：")}<a href="#">payment@zhiying.ai</a>　<a href="#">{t("积分规则")}</a>
+              </p>
+
+              <button className="rc-buy" onClick={() => setShowPay(true)} disabled={busy}>
+                {busy ? t("下单中…") : t("购买积分")}
+              </button>
+              {err && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 12, textAlign: "center" }}>{err}</div>}
+            </>
+          )}
+
+          {phase === "paying" && order && order.pay_url && !order.qr_code && (
+            <div style={{ textAlign: "center", padding: "12px 0" }}>
+              <div style={{ fontSize: 14, marginBottom: 4 }}>
+                {tf("已在新标签打开 Stripe 支付页，完成 ${usd} 信用卡支付", { usd: ((order.usd_cents ?? 0) / 100).toFixed(2) })}
+              </div>
+              <div className="dim-2" style={{ fontSize: 12, marginBottom: 12 }}>
+                {tf("到账 ≈ ¥{amt}", { amt: formatYuanInt(order.amount_cents) })}
+              </div>
+              <button className="btn btn-primary btn-lg" style={{ marginBottom: 12 }} onClick={() => window.open(order.pay_url!, "_blank", "noopener")}>
+                {t("重新打开支付页")}
+              </button>
+              <div className="dim-2" style={{ fontSize: 12 }}>
+                {t("支付完成后自动到账，本窗口会自动刷新…（如未弹出请检查浏览器拦截）")}
+              </div>
+              {err && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 12 }}>{err}</div>}
             </div>
-            <div className="recharge-amount-row">
-              {presets.map((p) => (
-                <button key={p} className={cn("recharge-preset", amountCents === p && "selected")} onClick={() => setAmountCents(p)}>
-                  <span className="cur">{cur}</span>
-                  <span className="mono">{formatYuanInt(p)}</span>
+          )}
+
+          {phase === "paying" && order && !(order.pay_url && !order.qr_code) && (
+            <div style={{ textAlign: "center", padding: "12px 0" }}>
+              <div style={{ fontSize: 14, marginBottom: 12 }}>
+                {tf("请用 {method} 扫码支付 ¥{amt}", { method: methodLabel, amt: formatYuanInt(order.amount_cents) })}
+              </div>
+              <div style={{ width: 224, height: 224, margin: "0 auto", border: "1px solid var(--border)", borderRadius: 12, display: "grid", placeItems: "center", padding: 12, background: "#fff" }}>
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt={t("支付二维码")} width={200} height={200} style={{ display: "block" }} />
+                ) : (
+                  <div className="mono" style={{ fontSize: 10, wordBreak: "break-all", color: "#666" }}>{order.qr_code}</div>
+                )}
+              </div>
+              <div className="dim-2" style={{ fontSize: 12, marginTop: 12 }}>{t("支付完成后自动到账，本窗口会自动刷新…")}</div>
+              {order.is_stub && (
+                <button className="btn btn-primary btn-lg" style={{ marginTop: 16 }} onClick={doMockPay} disabled={busy}>
+                  {busy ? t("处理中…") : t("模拟支付成功（dev）")}
                 </button>
-              ))}
-            </div>
-
-            <div className="dim-2 mono" style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", margin: "18px 0 10px" }}>
-              {t("或自定义金额")}{isStripe ? t("（美元）") : ""}
-            </div>
-            <div className="phone-input" style={{ maxWidth: 360 }}>
-              <span className="phone-cc" style={{ cursor: "default" }}>{cur}</span>
-              <input
-                className="input input-lg"
-                style={{ border: "none" }}
-                placeholder={isStripe ? "1 - 100000" : "1 - 1000000"}
-                value={yuan || ""}
-                onChange={(e) => setAmountCents(Number(e.target.value.replace(/\D/g, "")) * 100)}
-                inputMode="numeric"
-              />
-            </div>
-            <div className="dim-2" style={{ fontSize: 11, marginTop: 6 }}>
-              {isStripe
-                ? t("按美元收款，到账时按实时汇率换算成人民币计入余额；余额不过期")
-                : t("充值金额即为账户余额，按视频实际消耗扣费，余额不过期")}
-            </div>
-
-            <div className="dim-2 mono" style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", margin: "22px 0 10px" }}>
-              {t("支付方式")}
-            </div>
-            <div className="recharge-method-grid">
-              <button className={cn("recharge-method", method === "wechat" && "selected")} onClick={() => setMethod("wechat")}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="oklch(70% .14 150)">
-                  <path d="M8.5 4C4.36 4 1 6.69 1 10c0 1.89 1.1 3.57 2.82 4.66L3 17.5l3.04-1.66c.78.21 1.6.33 2.46.33.13 0 .26 0 .39-.01-.25-.65-.39-1.36-.39-2.1 0-3.31 3.36-6 7.5-6 .35 0 .69.03 1.03.08C16.21 5.31 12.7 4 8.5 4zm-2.5 4.5a1 1 0 110 2 1 1 0 010-2zm5 0a1 1 0 110 2 1 1 0 010-2zm5.5 4c-3.59 0-6.5 2.24-6.5 5 0 1.51.86 2.86 2.24 3.79L11.5 23l2.45-1.43c.66.17 1.36.27 2.05.27 3.59 0 6.5-2.24 6.5-5s-2.91-5-6.5-5z" />
-                </svg>
-                <span>{t("微信支付")}</span>
-                <span className="dim-2 mono" style={{ fontSize: 10 }}>WeChat Pay</span>
-              </button>
-              <button className={cn("recharge-method", method === "alipay" && "selected")} onClick={() => setMethod("alipay")}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="oklch(65% .14 230)">
-                  <path d="M5 3h14a2 2 0 012 2v9.2c-2.4-.5-5.1-1.6-7.7-2.9.6-1.2 1.1-2.5 1.4-3.7H10v-1.7h4.3v-1H10V3.8h2.1V3H10c-.6 0-1 .4-1 1v1h-3.4v1h3.4v1.7H5.9V9h6.4c-.2.8-.5 1.6-.9 2.4-2.5-1-3.9-1.5-5.4-1.5-3.1 0-3.9 2.5-3.4 4.4.4 1.4 1.6 2.6 4.1 2.6 1.7 0 3.9-.9 5.6-2.7 2.4 1.4 6.3 3 8.7 3.4V19a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm.5 8.8c-1.3 0-2.6.7-2.5 2 .1.9.9 1.6 2.3 1.6 1.4 0 3.1-.6 4.8-2.2-1.4-.8-3.2-1.4-4.6-1.4z" />
-                </svg>
-                <span>{t("支付宝")}</span>
-                <span className="dim-2 mono" style={{ fontSize: 10 }}>Alipay</span>
-              </button>
-              <button className={cn("recharge-method", method === "stripe" && "selected")} onClick={() => setMethod("stripe")}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="oklch(60% .18 280)">
-                  <path d="M13.5 9.6c0-.6.5-.8 1.2-.8 1.1 0 2.5.34 3.6.94V6.3a9 9 0 00-3.6-.7c-2.9 0-4.9 1.5-4.9 4.1 0 4 5.4 3.3 5.4 5 0 .7-.6.9-1.4.9-1.2 0-2.8-.5-4-1.2v3.5c1.3.56 2.7.85 4 .85 3 0 5-1.5 5-4.1 0-4.3-5.3-3.5-5.3-5z" />
-                </svg>
-                <span>Stripe</span>
-                <span className="dim-2 mono" style={{ fontSize: 10 }}>{t("海外信用卡")}</span>
-              </button>
-              <button className={cn("recharge-method", method === "bank" && "selected")} onClick={() => setMethod("bank")}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <path d="M2 10L12 4l10 6M4 10v9m4-9v9m4-9v9m4-9v9m4-9v9M2 21h20" />
-                </svg>
-                <span>{t("对公转账")}</span>
-                <span className="dim-2 mono" style={{ fontSize: 10 }}>{t("联系商务")}</span>
-              </button>
-            </div>
-
-            {method === "bank" && (
-              <div className="dim-2" style={{ fontSize: 12, marginTop: 12, color: "oklch(78% .12 70)" }}>
-                {t("对公转账请联系商务，由平台管理员后台手动充值到账。")}
-              </div>
-            )}
-            {method === "stripe" && (
-              <div className="dim-2" style={{ fontSize: 12, marginTop: 12 }}>
-                {tf("Stripe 适合海外信用卡，将跳转到 Stripe 安全收银台，按 ${amt} 美元收款；到账时按实时汇率换算成人民币计入余额。", { amt: formatYuanInt(amountCents) })}
-              </div>
-            )}
-            {err && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 12 }}>{err}</div>}
-          </div>
-        )}
-
-        {phase === "paying" && order && order.pay_url && !order.qr_code && (
-          /* Stripe:跳转支付,无二维码 */
-          <div className="recharge-body" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 14, marginBottom: 4 }}>
-              {tf("已在新标签打开 Stripe 支付页，完成 ${usd} 信用卡支付", { usd: ((order.usd_cents ?? 0) / 100).toFixed(2) })}
-            </div>
-            <div className="dim-2" style={{ fontSize: 12, marginBottom: 12 }}>
-              {tf("到账 ≈ ¥{amt}", { amt: formatYuanInt(order.amount_cents) })}
-              {order.rate ? tf("（汇率 1 USD = {rate} CNY）", { rate: order.rate.toFixed(3) }) : ""}
-            </div>
-            <button
-              className="btn btn-primary btn-lg"
-              style={{ marginBottom: 12 }}
-              onClick={() => window.open(order.pay_url!, "_blank", "noopener")}
-            >
-              {t("重新打开支付页")}
-            </button>
-            <div className="dim-2" style={{ fontSize: 12 }}>
-              {t("支付完成后自动到账，本窗口会自动刷新…（如未弹出请检查浏览器拦截）")}
-            </div>
-            {err && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 12 }}>{err}</div>}
-          </div>
-        )}
-
-        {phase === "paying" && order && !(order.pay_url && !order.qr_code) && (
-          <div className="recharge-body" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 14, marginBottom: 12 }}>
-              {tf("请用 {method} 扫码支付 ¥{amt}", {
-                method: method === "wechat" ? t("微信") : t("支付宝"),
-                amt: formatYuanInt(order.amount_cents),
-              })}
-            </div>
-            <div
-              style={{
-                width: 224, height: 224, margin: "0 auto",
-                border: "1px solid var(--border)", borderRadius: 12,
-                display: "grid", placeItems: "center", padding: 12,
-                background: "#fff",
-              }}
-            >
-              {qrDataUrl ? (
-                <img src={qrDataUrl} alt={t("支付二维码")} width={200} height={200} style={{ display: "block" }} />
-              ) : (
-                <div className="mono" style={{ fontSize: 10, wordBreak: "break-all", color: "#666" }}>
-                  {order.qr_code}
-                </div>
               )}
+              {err && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 12 }}>{err}</div>}
             </div>
-            <div className="dim-2" style={{ fontSize: 12, marginTop: 12 }}>
-              {t("支付完成后自动到账，本窗口会自动刷新…")}
-            </div>
-            {order.is_stub && (
-              <button className="btn btn-primary btn-lg" style={{ marginTop: 16 }} onClick={doMockPay} disabled={busy}>
-                {busy ? t("处理中…") : t("模拟支付成功（dev）")}
-              </button>
-            )}
-            {err && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 12 }}>{err}</div>}
-          </div>
-        )}
+          )}
 
-        {phase === "done" && (
-          <div className="recharge-body" style={{ textAlign: "center", padding: "40px 24px" }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "oklch(72% .16 150)" }}>{t("充值成功 ✓")}</div>
-            <div className="dim-2" style={{ fontSize: 13, marginTop: 8 }}>{t("余额已到账")}</div>
-          </div>
-        )}
-
-        {phase === "select" && (
-          <div className="recharge-foot">
-            <div className="recharge-summary">
-              <div>
-                <div className="dim-2 mono" style={{ fontSize: 11 }}>{isStripe ? t("本次支付") : t("本次充值")}</div>
-                <div className="recharge-summary-amount">
-                  <span className="cur">{cur}</span>
-                  <span className="mono">{formatYuanInt(amountCents)}</span>
-                </div>
-              </div>
-              <div style={{ borderLeft: "1px solid var(--border)", paddingLeft: 24 }}>
-                <div className="dim-2 mono" style={{ fontSize: 11 }}>{isStripe ? t("到账（人民币）") : t("充值后余额")}</div>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>
-                  {isStripe ? (
-                    <span className="dim-2" style={{ fontSize: 13 }}>{t("按实时汇率换算")}</span>
-                  ) : (
-                    <>
-                      <span className="dim-2" style={{ fontSize: 12, marginRight: 2 }}>¥</span>
-                      <span className="mono">{formatYuanInt(account.balance_cents + amountCents)}</span>
-                    </>
-                  )}
-                </div>
-              </div>
+          {phase === "done" && (
+            <div style={{ textAlign: "center", padding: "40px 24px" }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: "oklch(72% .16 150)" }}>{t("充值成功 ✓")}</div>
+              <div className="dim-2" style={{ fontSize: 13, marginTop: 8 }}>{t("积分已到账")}</div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-lg" onClick={onClose}>{t("取消")}</button>
-              <button className="btn btn-primary btn-lg" onClick={startPay} disabled={!valid || busy}>
-                {busy ? t("下单中…") : `${t("去支付")} ${cur}${formatYuanInt(amountCents)}`}
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {showPay && (
+        <PayMethodModal onClose={() => setShowPay(false)} onPick={startPay} />
+      )}
     </>
   );
 }

@@ -19,33 +19,47 @@ export const FIELD_DEFS: {
     { num: "01", id: "duration",   title: "视频总时长", tags: ["req"],              dataLayer: "global" },
     { num: "02", id: "ratio",      title: "画面比例",   tags: ["opt"],              dataLayer: "global" },
     { num: "03", id: "resolution", title: "视频分辨率", tags: ["opt"],              dataLayer: "global" },
-    { num: "04", id: "scene",      title: "场景",       tags: ["upload"],           dataLayer: "global" },
-    { num: "05", id: "position",   title: "站位图",     tags: ["opt", "upload"],    dataLayer: "global" },
-    { num: "06", id: "prop",       title: "道具",       tags: ["opt", "upload"],    dataLayer: "global" },
-    { num: "07", id: "storyboard", title: "分镜头脚本", tags: ["opt", "upload"],    dataLayer: "global" },
-    { num: "08", id: "style",      title: "影像风格",   tags: ["opt"],              dataLayer: "global" },
-    { num: "09", id: "characters", title: "角色调用",   tags: ["req"],              dataLayer: "global" },
-    { num: "10", id: "story",      title: "故事内容",   tags: ["req"],              dataLayer: "global" },
-    { num: "11", id: "imageQuality", title: "画质内容", tags: ["opt"],              dataLayer: "global" },
-    { num: "11b", id: "constraint", title: "想象力约束", tags: ["opt"],            dataLayer: "global" },
-    { num: "12", id: "ambientSfx", title: "环境音效",   tags: ["opt"],              dataLayer: "output" },
-    { num: "13", id: "subtitle",   title: "字幕",       tags: ["opt"],              dataLayer: "output" },
-    { num: "14", id: "music",      title: "背景音乐",   tags: ["opt"],              dataLayer: "output" },
-    { num: "15", id: "narrationAudio", title: "旁白音频", tags: ["opt", "audio"],   dataLayer: "global" },
+    { num: "04", id: "style",      title: "影像风格",   tags: ["opt"],              dataLayer: "global" },
+    { num: "05", id: "constraint", title: "想象力约束", tags: ["opt"],              dataLayer: "global" },
+    { num: "06", id: "story",      title: "故事内容",   tags: ["req"],              dataLayer: "global" },
+    { num: "07", id: "characters", title: "角色调用",   tags: ["req"],              dataLayer: "global" },
+    { num: "08", id: "scene",      title: "场景",       tags: ["upload"],           dataLayer: "global" },
+    { num: "09", id: "prop",       title: "道具",       tags: ["opt", "upload"],    dataLayer: "global" },
+    { num: "10", id: "position",   title: "站位图",     tags: ["opt", "upload"],    dataLayer: "global" },
+    { num: "11", id: "storyboard", title: "分镜头脚本", tags: ["opt", "upload"],    dataLayer: "global" },
+    { num: "12", id: "imageQuality", title: "画质内容", tags: ["opt"],              dataLayer: "global" },
+    { num: "13", id: "ambientSfx", title: "环境音效",   tags: ["opt"],              dataLayer: "output" },
+    { num: "14", id: "narrationAudio", title: "旁白音频", tags: ["opt", "audio"],   dataLayer: "global" },
+    { num: "15", id: "subtitle",   title: "字幕",       tags: ["opt"],              dataLayer: "output" },
+    { num: "16", id: "music",      title: "背景音乐",   tags: ["opt"],              dataLayer: "output" },
   ],
   shot: [
-    { num: "11", id: "shotSize",  title: "景别",         tags: ["opt"] },
-    { num: "12", id: "duration",  title: "分镜时长分配", tags: ["opt"] },
-    { num: "13", id: "action",    title: "角色动作",     tags: ["req"] },
-    { num: "14", id: "micro",     title: "微表情控制",   tags: ["opt"] },
-    { num: "15", id: "gesture",   title: "小动作控制",   tags: ["opt"] },
-    { num: "16", id: "camera",    title: "摄像机运动",   tags: ["opt"] },
-    { num: "17", id: "lines",     title: "台词",         tags: ["opt"] },
-    { num: "18", id: "mono",      title: "内心独白",     tags: ["opt"] },
-    { num: "19", id: "narration", title: "旁白",         tags: ["opt"] },
-    { num: "20", id: "sfx",       title: "关键动作音效", tags: ["opt"] },
+    { num: "17", id: "description", title: "分镜描述",     tags: ["opt"] },
+    { num: "18", id: "duration",    title: "分镜时长分配", tags: ["opt"] },
+    { num: "19", id: "cast",        title: "分镜出场角色", tags: ["opt"] },
+    { num: "20", id: "action",      title: "角色动作",     tags: ["opt"] },
+    { num: "21", id: "micro",       title: "微表情控制",   tags: ["opt"] },
+    { num: "22", id: "gesture",     title: "小动作控制",   tags: ["opt"] },
+    { num: "23", id: "shotSize",    title: "景别",         tags: ["opt"] },
+    { num: "24", id: "camera",      title: "摄像机运动",   tags: ["opt"] },
+    { num: "25", id: "lines",       title: "台词",         tags: ["opt"] },
+    { num: "26", id: "mono",        title: "内心独白",     tags: ["opt"] },
+    { num: "27", id: "narration",   title: "旁白",         tags: ["opt"] },
+    { num: "28", id: "sfx",         title: "关键动作音效", tags: ["opt"] },
   ],
 };
+
+/** 全局场景层的三段分组(导航与编辑器内容区共用,保证顺序一致) */
+export interface GlobalGroup {
+  key: string;
+  title: string;
+  ids: string[];
+}
+export const GLOBAL_GROUPS: GlobalGroup[] = [
+  { key: "basic",    title: "基础设置",   ids: ["duration", "ratio", "resolution", "style", "constraint"] },
+  { key: "material", title: "素材库导入", ids: ["story", "characters", "scene", "prop", "position", "storyboard"] },
+  { key: "other",    title: "其他设置",   ids: ["imageQuality", "ambientSfx", "narrationAudio", "subtitle", "music"] },
+];
 
 export const MODULE_HELPS: Record<string, string> = {
   "g.duration":   "整支视频的目标总时长，必填。Seedance 2.0 接口支持 5 / 8 / 11 秒，自定义值会向上对齐到这三档。各分镜可在「分镜时长分配」里单独指定，留空的分镜由系统在总时长内自动均摊。",
