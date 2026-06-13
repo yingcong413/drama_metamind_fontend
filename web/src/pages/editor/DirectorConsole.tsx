@@ -188,7 +188,14 @@ const ratioVal = (r: string): number | null => {
 // ── GLB 素体:用户提供的带骨骼高模(Tripo 图生3D + AccuRig),按体型逐个替换程序化素体 ──
 // 暂时停用:先把程序化素体的全部姿势调正确,GLB 姿势重定向再继续(管线与重定向代码保留)
 const GLB_BODIES: Partial<Record<BodyType, string>> = {
-  // male: "/models/body-male.glb",
+  male: "/models/body-male.glb",
+  female: "/models/body-female.glb",
+  broad: "/models/body-broad.glb",
+  muscle: "/models/body-muscle.glb",
+  slim: "/models/body-slim.glb",
+  teen: "/models/body-teen.glb",
+  child: "/models/body-child.glb",
+  chibi: "/models/body-chibi.glb",
 };
 
 // 姿势重定向:把姿势参数(以"直立垂手"为零姿态)映射到 AccuRig 骨骼。
@@ -202,6 +209,7 @@ interface RigData {
   hipsWorldY: number;
   dropUnit: number; // 世界 1 米对应的骨骼局部单位
   hipParentInvQ: THREE.Quaternion; // Hip 父级绑定世界姿态的逆(世界位移 → 局部位移)
+  alignQ: THREE.Quaternion; // 把姿势的"标准朝向(正面+Z/左右X)"对齐到本模型实际朝向的绕 Y 旋转
 }
 function buildRig(root: THREE.Object3D): RigData | null {
   root.updateMatrixWorld(true);
@@ -251,17 +259,28 @@ function buildRig(root: THREE.Object3D): RigData | null {
   const ps = new THREE.Vector3();
   const pq = new THREE.Quaternion();
   hip.parent!.matrixWorld.decompose(new THREE.Vector3(), pq, ps);
+  // 从肩线几何推出模型正面朝向:lat=左肩→右肩(水平),fwd=up×lat;
+  // alignQ 把"标准姿势约定(正面+Z)"绕 Y 旋到本模型的 fwd —— 否则前抬会变成侧展(行走张腿的根因)
+  const up = new THREE.Vector3(0, 1, 0);
+  const lat = wp(byName.get("R_Upperarm")!).sub(wp(byName.get("L_Upperarm")!));
+  lat.y = 0; lat.normalize();
+  const fwd = up.clone().cross(lat).normalize();
+  const azim = Math.atan2(fwd.x, fwd.z); // +Z → fwd 的绕 Y 夹角
+  const alignQ = new THREE.Quaternion().setFromAxisAngle(up, azim);
   return {
     rootBone: rb, baseQ, rest, mapped, hip,
     hipsWorldY: wp(hip).y,
     dropUnit: 1 / Math.max(Math.abs(ps.y), 1e-6),
     hipParentInvQ: pq.invert(),
+    alignQ,
   };
 }
 function applyPoseRig(rig: RigData, p: Record<string, number>) {
   const v = (k: string) => p[k] ?? 0;
+  // 共轭对齐:把标准约定下的世界旋转旋到本模型朝向(绕 Y 转过的轴上施加同样的角度)
+  const A = rig.alignQ, Ai = A.clone().invert();
   const E = (x: number, y: number, z: number, o: THREE.EulerOrder = "XYZ") =>
-    new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, o));
+    A.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, o))).multiply(Ai);
   const deltas: Record<string, THREE.Quaternion> = {
     hips: E(deg(v("bodyBend")), deg(v("bodyTurn")), deg(v("bodyLean"))),
     spine: E(deg(v("torsoBend")), deg(v("torsoTwist")), deg(v("torsoLean"))),
